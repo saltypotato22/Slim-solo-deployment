@@ -40,12 +40,25 @@
   };
 
   function init(canvasElement) {
+    // Clean up any existing listeners first
+    if (canvas) {
+      dispose();
+    }
+
     canvas = canvasElement;
     ctx = canvas.getContext('2d');
     setupCanvas();
 
     canvas.addEventListener('click', handleCanvasClick);
     canvas.addEventListener('mousemove', handleCanvasHover);
+  }
+
+  function dispose() {
+    if (canvas) {
+      canvas.removeEventListener('click', handleCanvasClick);
+      canvas.removeEventListener('mousemove', handleCanvasHover);
+    }
+    currentRenderState = null;
   }
 
   function setupCanvas() {
@@ -384,6 +397,7 @@
     init,
     render,
     resize,
+    dispose,
     themes
   };
 })();

@@ -234,7 +234,7 @@
   function FretCountSlider({ state, dispatch, actions }) {
     const handleFretChange = (e) => {
       const value = parseInt(e.target.value);
-      if (!isNaN(value) && value >= 12 && value <= 24) {
+      if (!isNaN(value) && value >= 0 && value <= 24) {
         dispatch({ type: actions.SET_FRET_COUNT, payload: value });
       }
     };
@@ -246,13 +246,13 @@
         </label>
         <input
           type="number"
-          min="12"
+          min="0"
           max="24"
           value=${state.fretCount}
           onChange=${handleFretChange}
           class="flex-1 px-2 py-1 rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-800 shadow-sm text-sm"
           aria-label="Adjust fret count"
-          aria-valuemin="12"
+          aria-valuemin="0"
           aria-valuemax="24"
           aria-valuenow=${state.fretCount}
         />
