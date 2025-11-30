@@ -117,15 +117,15 @@
       50% { transform: rotate(90deg); }
     }
 
-    /* Show overlay in portrait mode on touch devices */
-    @media (orientation: portrait) and (max-width: 900px) {
+    /* Portrait overlay disabled - allow portrait mode */
+    /* @media (orientation: portrait) and (max-width: 900px) {
       #portrait-overlay {
         display: flex;
       }
       #app {
         display: none;
       }
-    }
+    } */
 
     /* Mobile breakpoint: landscape phones (height < 500px) */
     @media (max-height: 500px) {
@@ -319,7 +319,7 @@
   <script src="modules/equivalentScalesData.js?v=4"></script>
   <script src="modules/instruments.js?v=4"></script>
   <script src="modules/fretboardCanvas.js?v=5"></script>
-  <script src="modules/controlPanel.js?v=16"></script>
+  <script src="modules/controlPanel.js?v=21"></script>
   <script src="modules/exportManager.js?v=4"></script>
   <script src="app.js?v=8"></script>
 </body>

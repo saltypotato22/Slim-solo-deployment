@@ -249,9 +249,11 @@
   }
 
   function FretCountSlider({ state, dispatch, actions }) {
+    const fretOptions = Array.from({ length: 21 }, (_, i) => i + 4); // 4 to 24
+
     const handleFretChange = (e) => {
       const value = parseInt(e.target.value);
-      if (!isNaN(value) && value >= 0 && value <= 24) {
+      if (!isNaN(value)) {
         dispatch({ type: actions.SET_FRET_COUNT, payload: value });
       }
     };
@@ -261,18 +263,16 @@
         <label class="text-xs font-medium text-gray-900 dark:text-gray-100">
           Frets:
         </label>
-        <input
-          type="number"
-          min="0"
-          max="24"
+        <select
           value=${state.fretCount}
           onChange=${handleFretChange}
           class="flex-1 px-2 py-1 rounded-md border-gray-300 shadow-sm text-sm"
-          aria-label="Adjust fret count"
-          aria-valuemin="0"
-          aria-valuemax="24"
-          aria-valuenow=${state.fretCount}
-        />
+          aria-label="Select fret count"
+        >
+          ${fretOptions.map(n => html`
+            <option key=${n} value=${n}>${n}</option>
+          `)}
+        </select>
       </div>
     `;
   }
@@ -340,7 +340,7 @@
         onClick=${handleExport}
         class="w-full px-3 py-1.5 bg-blue-500 text-white rounded-md hover:bg-blue-600 transition-colors text-xs font-medium"
       >
-        📥 Export PNG
+        📥 PNG
       </button>
     `;
   }
@@ -474,7 +474,7 @@
     `;
   }
 
-  // Layout toggle button component - slick pill switch
+  // Layout toggle button component - compact square text-only
   function LayoutToggle({ state, dispatch, actions }) {
     const handleToggle = () => {
       const newLayout = state.menuLayout === 'sidebar' ? 'topbar' : 'sidebar';
@@ -486,25 +486,15 @@
     return html`
       <button
         onClick=${handleToggle}
-        class="layout-toggle-btn flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium transition-all
+        class="layout-toggle-btn flex flex-col items-center justify-center px-1.5 py-0.5 rounded text-xs font-medium leading-tight transition-all
                bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600
                border border-gray-300 dark:border-gray-600"
         aria-label="Toggle menu layout"
         title=${isSidebar ? 'Switch to top bar' : 'Switch to sidebar'}
       >
-        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          ${isSidebar
-            ? html`<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />`
-            : html`<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h8" />`
-          }
-        </svg>
         ${isSidebar
-          ? html`<span class="hidden sm:inline">Top Menu</span>`
-          : html`<span class="hidden sm:flex flex-col leading-none text-center">
-              <span>Side</span>
-              <span>Menu</span>
-            </span>`
-        }
+          ? 'Top Menu'
+          : html`<span>Side</span><span>Menu</span>`}
       </button>
     `;
   }
@@ -671,23 +661,26 @@
 
   // Compact fret count for top bar
   function FretCountCompact({ state, dispatch, actions }) {
+    const fretOptions = Array.from({ length: 21 }, (_, i) => i + 4); // 4 to 24
+
     const handleFretChange = (e) => {
       const value = parseInt(e.target.value);
-      if (!isNaN(value) && value >= 0 && value <= 24) {
+      if (!isNaN(value)) {
         dispatch({ type: actions.SET_FRET_COUNT, payload: value });
       }
     };
 
     return html`
-      <input
-        type="number"
-        min="0"
-        max="24"
+      <select
         value=${state.fretCount}
         onChange=${handleFretChange}
-        class="topbar-input rounded border-gray-300 shadow-sm text-xs px-1 py-0.5 w-12"
+        class="topbar-select rounded border-gray-300 shadow-sm text-xs px-1 py-0.5"
         aria-label="Fret count"
-      />
+      >
+        ${fretOptions.map(n => html`
+          <option key=${n} value=${n}>${n}</option>
+        `)}
+      </select>
     `;
   }
 
@@ -725,7 +718,7 @@
         class="w-full px-2 py-0.5 rounded text-xs font-medium bg-blue-500 text-white hover:bg-blue-600 transition-colors whitespace-nowrap"
         aria-label="Export PNG"
       >
-        📥 Export PNG
+        📥 PNG
       </button>
     `;
   }
@@ -799,9 +792,9 @@
 
           <div class="topbar-divider h-8 w-px bg-gray-300 dark:bg-gray-600 self-center" />
 
-          <!-- Frets + Stacked buttons -->
-          <div class="flex items-center gap-1 self-center">
-            <span class="topbar-label">Frets:</span>
+          <!-- Frets -->
+          <div class="flex flex-col self-center">
+            <span class="text-xs font-medium text-gray-700 dark:text-gray-300">Frets</span>
             <${FretCountCompact} state=${state} dispatch=${dispatch} actions=${actions} />
           </div>
 
