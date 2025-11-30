@@ -96,10 +96,10 @@
     // Mobile detection: landscape phone (height < 500px)
     const isMobile = window.innerHeight < 500;
 
-    // Responsive padding: smaller on mobile
+    // Responsive padding: minimal top padding to align fretboard to top
     const padding = isMobile
-      ? { top: 25, right: 25, bottom: 25, left: 35 }
-      : { top: 60, right: 60, bottom: 60, left: 80 };
+      ? { top: 2, right: 25, bottom: 25, left: 35 }
+      : { top: 5, right: 60, bottom: 60, left: 80 };
 
     const horizontalPadding = padding.left + padding.right;
     const verticalPadding = padding.top + padding.bottom;
