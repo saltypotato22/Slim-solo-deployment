@@ -196,9 +196,23 @@
         case actions.TOGGLE_PANEL:
           return { ...state, panelCollapsed: !state.panelCollapsed };
         case actions.CYCLE_FRET: {
-          const { noteName, nextState, clickedString, clickedFret } = action.payload;
+          const { noteName, clickedString, clickedFret } = action.payload;
           const newFretStates = new Map(state.fretStates);
           const stringCount = window.SlimSolo.Instruments.STRING_COUNT;
+
+          // Calculate nextState from CURRENT state (not stale ref)
+          const clickedKey = `${clickedString}-${clickedFret}`;
+          const currentState = state.fretStates.get(clickedKey) || 'blank';
+          let nextState;
+          if (currentState === 'blank') {
+            nextState = 'blue-circle';
+          } else if (currentState === 'blue-circle') {
+            nextState = 'blue-solid';
+          } else if (currentState === 'blue-solid') {
+            nextState = 'blank';
+          } else {
+            nextState = 'blue-circle';
+          }
 
           const isCircleState = nextState === 'blue-circle';
 
@@ -552,7 +566,7 @@
       }, []);
 
       // Handle note clicks from canvas - 3-state cycling (ALL octaves together)
-      // Uses stateRef to avoid stale closures and prevent re-registration on every state change
+      // Uses stateRef only to check root note; nextState calculated in reducer for accuracy
       useEffect(() => {
         window.SlimSolo.onNoteClick = (string, fret) => {
           const currentState = stateRef.current;
@@ -560,32 +574,20 @@
           if (!note) return; // Null check for safety
           const noteName = note.replace(/\d+/, '');
 
+          // Don't allow clicking root notes
           if (noteName === currentState.rootNote) return;
 
-          const key = `${string}-${fret}`;
-          const fretState = currentState.fretStates.get(key) || 'blank';
-
-          let nextState;
-          if (fretState === 'blank' || !fretState) {
-            nextState = 'blue-circle';
-          } else if (fretState === 'blue-circle') {
-            nextState = 'blue-solid';
-          } else if (fretState === 'blue-solid') {
-            nextState = 'blank';
-          } else {
-            nextState = 'blue-circle';
-          }
-
+          // Dispatch to reducer - nextState calculated there for correct batching
           dispatch({
             type: actions.CYCLE_FRET,
-            payload: { noteName, nextState, clickedString: string, clickedFret: fret }
+            payload: { noteName, clickedString: string, clickedFret: fret }
           });
         };
 
         return () => {
           window.SlimSolo.onNoteClick = null;
         };
-      }, [dispatch]); // Stable dependencies - uses stateRef for fresh state
+      }, [dispatch]); // Stable dependencies - uses stateRef only for root check
 
       return html`
         <div class="h-full flex">
