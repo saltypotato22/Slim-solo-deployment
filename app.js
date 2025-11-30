@@ -67,13 +67,15 @@
     }
 
     const initialState = {
-      scale: 'major',
+      tuning: window.SlimSolo.Instruments.DEFAULT_TUNING,
+      scale: 'minor',
       mode: 'ionian',
       rootNote: 'E',
-      fretCount: 16,
-      displayMode: 'notes',
+      fretCount: 8,
+      displayMode: 'semitones',
       showAllOpenStrings: true,
       theme: 'light',
+      menuLayout: 'sidebar', // 'sidebar' | 'topbar'
       panelCollapsed: false,
       fretStates: new Map(),
       isManuallyEdited: false,
@@ -81,6 +83,7 @@
     };
 
     const actions = {
+      SET_TUNING: 'SET_TUNING',
       SET_SCALE: 'SET_SCALE',
       SET_MODE: 'SET_MODE',
       SET_ROOT: 'SET_ROOT',
@@ -89,20 +92,22 @@
       SET_DISPLAY_MODE: 'SET_DISPLAY_MODE',
       TOGGLE_ALL_OPEN_STRINGS: 'TOGGLE_ALL_OPEN_STRINGS',
       SET_THEME: 'SET_THEME',
+      SET_MENU_LAYOUT: 'SET_MENU_LAYOUT',
       TOGGLE_PANEL: 'TOGGLE_PANEL',
       CYCLE_FRET: 'CYCLE_FRET',
       LOAD_SCALE_FROM_LIST: 'LOAD_SCALE_FROM_LIST',
       SET_FROM_EQUIVALENT: 'SET_FROM_EQUIVALENT'
     };
 
-    function populateFretStatesForScale(rootNote, scale, mode, fretCount) {
+    function populateFretStatesForScale(tuning, rootNote, scale, mode, fretCount) {
       const newFretStates = new Map();
       const scaleNotes = window.SlimSolo.MusicTheory.getScaleNotes(rootNote, scale, mode);
-      const stringCount = window.SlimSolo.Instruments.STRING_COUNT;
+      const stringCount = window.SlimSolo.Instruments.getStringCount(tuning);
 
       for (let string = 0; string < stringCount; string++) {
         for (let fret = 0; fret <= fretCount; fret++) {
-          const note = window.SlimSolo.Instruments.getStringNote(string, fret);
+          const note = window.SlimSolo.Instruments.getStringNote(tuning, string, fret);
+          if (!note) continue; // Null check for safety
           const noteName = note.replace(/\d+/, '');
 
           if (noteName === rootNote) continue;
@@ -118,6 +123,22 @@
 
     function stateReducer(state, action) {
       switch (action.type) {
+        case actions.SET_TUNING: {
+          // Reset to default scale (E Minor) when changing tuning
+          const defaultRoot = 'E';
+          const defaultScale = 'minor';
+          const defaultMode = defaultScale === 'major' ? 'ionian' : defaultScale;
+          return {
+            ...state,
+            tuning: action.payload,
+            rootNote: defaultRoot,
+            scale: defaultScale,
+            mode: defaultMode,
+            isManuallyEdited: false,
+            detectedScale: null,
+            fretStates: populateFretStatesForScale(action.payload, defaultRoot, defaultScale, defaultMode, state.fretCount)
+          };
+        }
         case actions.SET_SCALE: {
           const newMode = action.payload === 'major' ? 'ionian' : action.payload;
           return {
@@ -126,26 +147,27 @@
             mode: newMode,
             isManuallyEdited: false,
             detectedScale: null,
-            fretStates: populateFretStatesForScale(state.rootNote, action.payload, newMode, state.fretCount)
+            fretStates: populateFretStatesForScale(state.tuning, state.rootNote, action.payload, newMode, state.fretCount)
           };
         }
         case actions.SET_MODE: {
           return {
             ...state,
             mode: action.payload,
-            fretStates: populateFretStatesForScale(state.rootNote, state.scale, action.payload, state.fretCount)
+            fretStates: populateFretStatesForScale(state.tuning, state.rootNote, state.scale, action.payload, state.fretCount)
           };
         }
         case actions.SET_ROOT: {
           const newFretStates = new Map(state.fretStates);
           const oldRoot = state.rootNote;
           const newRoot = action.payload;
-          const stringCount = window.SlimSolo.Instruments.STRING_COUNT;
+          const stringCount = window.SlimSolo.Instruments.getStringCount(state.tuning);
 
           // Process all fretboard positions
           for (let s = 0; s < stringCount; s++) {
             for (let f = 0; f <= state.fretCount; f++) {
-              const note = window.SlimSolo.Instruments.getStringNote(s, f);
+              const note = window.SlimSolo.Instruments.getStringNote(state.tuning, s, f);
+              if (!note) continue; // Null check for safety
               const noteName = note.replace(/\d+/, '');
               const posKey = `${s}-${f}`;
 
@@ -173,6 +195,7 @@
             ...state,
             rootNote: action.payload,
             fretStates: populateFretStatesForScale(
+              state.tuning,
               action.payload,
               state.scale,
               state.mode,
@@ -182,30 +205,107 @@
             detectedScale: null
           };
         }
-        case actions.SET_FRET_COUNT:
-          return { ...state, fretCount: action.payload };
+        case actions.SET_FRET_COUNT: {
+          const newFretCount = action.payload;
+          const oldFretCount = state.fretCount;
+
+          // If decreasing frets, just update the count (notes beyond won't render)
+          if (newFretCount <= oldFretCount) {
+            return { ...state, fretCount: newFretCount };
+          }
+
+          // Increasing frets - need to populate new positions
+
+          // If clean scale (not manually edited), repopulate entire scale
+          if (!state.isManuallyEdited) {
+            return {
+              ...state,
+              fretCount: newFretCount,
+              fretStates: populateFretStatesForScale(
+                state.tuning,
+                state.rootNote,
+                state.scale,
+                state.mode,
+                newFretCount
+              )
+            };
+          }
+
+          // If manually edited, extend existing note pattern to new frets
+          const newFretStates = new Map(state.fretStates);
+          const stringCount = window.SlimSolo.Instruments.getStringCount(state.tuning);
+
+          // Find all note names currently in blue states
+          const blueNotes = new Set();
+          state.fretStates.forEach((value, key) => {
+            if (value === 'blue-circle' || value === 'blue-solid') {
+              const [string, fret] = key.split('-').map(Number);
+              const note = window.SlimSolo.Instruments.getStringNote(state.tuning, string, fret);
+              if (note) {
+                blueNotes.add(note.replace(/\d+/, ''));
+              }
+            }
+          });
+
+          // Add these notes at new fret positions
+          for (let string = 0; string < stringCount; string++) {
+            for (let fret = oldFretCount + 1; fret <= newFretCount; fret++) {
+              const note = window.SlimSolo.Instruments.getStringNote(state.tuning, string, fret);
+              if (!note) continue;
+              const noteName = note.replace(/\d+/, '');
+
+              // Skip root notes (never in fretStates)
+              if (noteName === state.rootNote) continue;
+
+              // If this note is in our blue notes, add it as blue-circle
+              if (blueNotes.has(noteName)) {
+                newFretStates.set(`${string}-${fret}`, 'blue-circle');
+              }
+            }
+          }
+
+          return {
+            ...state,
+            fretCount: newFretCount,
+            fretStates: newFretStates
+          };
+        }
         case actions.SET_DISPLAY_MODE:
           return { ...state, displayMode: action.payload };
         case actions.TOGGLE_ALL_OPEN_STRINGS:
           return { ...state, showAllOpenStrings: !state.showAllOpenStrings };
-        case actions.SET_THEME: {
-          const newTheme = action.payload;
-          document.documentElement.className = newTheme;
-          localStorage.setItem('theme', newTheme);
-          return { ...state, theme: newTheme };
-        }
+        case actions.SET_THEME:
+          // Pure reducer - side effects moved to useEffect
+          return { ...state, theme: action.payload };
+        case actions.SET_MENU_LAYOUT:
+          return { ...state, menuLayout: action.payload };
         case actions.TOGGLE_PANEL:
           return { ...state, panelCollapsed: !state.panelCollapsed };
         case actions.CYCLE_FRET: {
-          const { noteName, nextState, clickedString, clickedFret } = action.payload;
+          const { noteName, clickedString, clickedFret } = action.payload;
           const newFretStates = new Map(state.fretStates);
-          const stringCount = window.SlimSolo.Instruments.STRING_COUNT;
+          const stringCount = window.SlimSolo.Instruments.getStringCount(state.tuning);
+
+          // Calculate nextState from CURRENT state (not stale ref)
+          const clickedKey = `${clickedString}-${clickedFret}`;
+          const currentState = state.fretStates.get(clickedKey) || 'blank';
+          let nextState;
+          if (currentState === 'blank') {
+            nextState = 'blue-circle';
+          } else if (currentState === 'blue-circle') {
+            nextState = 'blue-solid';
+          } else if (currentState === 'blue-solid') {
+            nextState = 'blank';
+          } else {
+            nextState = 'blue-circle';
+          }
 
           const isCircleState = nextState === 'blue-circle';
 
           for (let s = 0; s < stringCount; s++) {
             for (let f = 0; f <= state.fretCount; f++) {
-              const note = window.SlimSolo.Instruments.getStringNote(s, f);
+              const note = window.SlimSolo.Instruments.getStringNote(state.tuning, s, f);
+              if (!note) continue; // Null check for safety
               const noteNameAtPos = note.replace(/\d+/, '');
 
               if (noteNameAtPos === noteName) {
@@ -239,28 +339,54 @@
           const { root, scale, mode } = action.payload;
           const newScale = scale || mode;
           const newMode = mode || newScale;
+          const oldRoot = state.rootNote;
+          const newRoot = root;
+          const stringCount = window.SlimSolo.Instruments.getStringCount(state.tuning);
 
           // Get the notes in the new scale
-          const newScaleNotes = window.SlimSolo.MusicTheory.getScaleNotes(root, newScale, newMode);
+          const newScaleNotes = window.SlimSolo.MusicTheory.getScaleNotes(newRoot, newScale, newMode);
 
-          // Filter fretStates to only keep notes in the new scale (preserve circle/solid state)
+          // Start with filtered fretStates (only notes in new scale)
           const newFretStates = new Map();
           state.fretStates.forEach((value, key) => {
             const [string, fret] = key.split('-').map(Number);
-            const note = window.SlimSolo.Instruments.getStringNote(string, fret);
+            const note = window.SlimSolo.Instruments.getStringNote(state.tuning, string, fret);
+            if (!note) return;
 
             if (window.SlimSolo.MusicTheory.isNoteInScale(note, newScaleNotes)) {
-              newFretStates.set(key, value); // Keep this fret with its current state
+              newFretStates.set(key, value);
             }
-            // Otherwise, don't add it (remove it from fretStates)
           });
+
+          // Handle root change: old root becomes blue-circle, new root removed from fretStates
+          if (oldRoot !== newRoot) {
+            for (let s = 0; s < stringCount; s++) {
+              for (let f = 0; f <= state.fretCount; f++) {
+                const note = window.SlimSolo.Instruments.getStringNote(state.tuning, s, f);
+                if (!note) continue;
+                const noteName = note.replace(/\d+/, '');
+                const posKey = `${s}-${f}`;
+
+                // Old root becomes blue-circle (if it's in the new scale)
+                if (noteName === oldRoot && window.SlimSolo.MusicTheory.isNoteInScale(note, newScaleNotes)) {
+                  newFretStates.set(posKey, 'blue-circle');
+                }
+
+                // New root removed from fretStates (roots are never in fretStates)
+                if (noteName === newRoot) {
+                  newFretStates.delete(posKey);
+                }
+              }
+            }
+          }
 
           return {
             ...state,
-            rootNote: root,
+            rootNote: newRoot,
             scale: newScale,
             mode: newMode,
-            fretStates: newFretStates
+            fretStates: newFretStates,
+            isManuallyEdited: true
           };
         }
         case actions.SET_FROM_EQUIVALENT: {
@@ -268,13 +394,14 @@
           const newFretStates = new Map(state.fretStates);
           const oldRoot = state.rootNote;
           const newRoot = root;
-          const stringCount = window.SlimSolo.Instruments.STRING_COUNT;
+          const stringCount = window.SlimSolo.Instruments.getStringCount(state.tuning);
 
           // Process all fretboard positions (same logic as SET_ROOT)
           // Keep all existing notes, just swap which one is the root
           for (let s = 0; s < stringCount; s++) {
             for (let f = 0; f <= state.fretCount; f++) {
-              const note = window.SlimSolo.Instruments.getStringNote(s, f);
+              const note = window.SlimSolo.Instruments.getStringNote(state.tuning, s, f);
+              if (!note) continue; // Null check for safety
               const noteName = note.replace(/\d+/, '');
               const posKey = `${s}-${f}`;
 
@@ -307,25 +434,54 @@
     function App() {
       const [state, dispatch] = useReducer(stateReducer, initialState);
       const [equivalentsLoaded, setEquivalentsLoaded] = useState(false);
+      const [isMobile, setIsMobile] = useState(false);
+      const [sidebarOpen, setSidebarOpen] = useState(false);
       const canvasRef = useRef(null);
       const stateRef = useRef(state);
+
+      // Detect mobile (landscape phone: height < 500px)
+      useEffect(() => {
+        const checkMobile = () => {
+          const mobile = window.innerHeight < 500;
+          setIsMobile(mobile);
+          // Auto-close sidebar when switching to mobile
+          if (mobile) setSidebarOpen(false);
+        };
+        checkMobile();
+        window.addEventListener('resize', checkMobile);
+        return () => window.removeEventListener('resize', checkMobile);
+      }, []);
 
       // Keep stateRef in sync with state
       useEffect(() => {
         stateRef.current = state;
       }, [state]);
 
-      // Load equivalent scales CSV at startup
+      // Load equivalent scales CSV at startup with retry logic
+      const [csvLoadError, setCsvLoadError] = useState(null);
+
       useEffect(() => {
-        window.SlimSolo.EquivalentScalesData.loadEquivalents()
-          .then(() => {
-            setEquivalentsLoaded(true);
-            console.log('Equivalent scales data loaded successfully');
-          })
-          .catch(err => {
-            console.error('Failed to load equivalent scales:', err.message);
-            setEquivalentsLoaded(false);
-          });
+        const loadWithRetry = async (maxRetries = 3) => {
+          for (let attempt = 1; attempt <= maxRetries; attempt++) {
+            try {
+              await window.SlimSolo.EquivalentScalesData.loadEquivalents();
+              setEquivalentsLoaded(true);
+              setCsvLoadError(null);
+              return; // Success
+            } catch (err) {
+              console.warn(`CSV load attempt ${attempt}/${maxRetries} failed:`, err.message);
+              if (attempt === maxRetries) {
+                setCsvLoadError(`Failed to load scale data: ${err.message}`);
+                setEquivalentsLoaded(false);
+              } else {
+                // Wait before retry (exponential backoff: 1s, 2s, 4s)
+                await new Promise(r => setTimeout(r, 1000 * Math.pow(2, attempt - 1)));
+              }
+            }
+          }
+        };
+
+        loadWithRetry();
       }, []);
 
       // Load saved preferences and initialize fretStates
@@ -335,8 +491,24 @@
           dispatch({ type: actions.SET_THEME, payload: savedTheme });
         }
 
+        const savedLayout = localStorage.getItem('menuLayout');
+        if (savedLayout && (savedLayout === 'sidebar' || savedLayout === 'topbar')) {
+          dispatch({ type: actions.SET_MENU_LAYOUT, payload: savedLayout });
+        }
+
         dispatch({ type: actions.SET_SCALE, payload: initialState.scale });
       }, []);
+
+      // Theme side effects (moved from reducer for purity)
+      useEffect(() => {
+        document.documentElement.className = state.theme;
+        localStorage.setItem('theme', state.theme);
+      }, [state.theme]);
+
+      // Menu layout persistence
+      useEffect(() => {
+        localStorage.setItem('menuLayout', state.menuLayout);
+      }, [state.menuLayout]);
 
       // Calculate scale notes and positions with useMemo
       const { scaleNotes, notePositions } = useMemo(() => {
@@ -347,10 +519,10 @@
         );
 
         const notePositions = [];
-        const stringCount = window.SlimSolo.Instruments.STRING_COUNT;
+        const stringCount = window.SlimSolo.Instruments.getStringCount(state.tuning);
         for (let stringIndex = 0; stringIndex < stringCount; stringIndex++) {
           for (let fret = 0; fret <= state.fretCount; fret++) {
-            const note = window.SlimSolo.Instruments.getStringNote(stringIndex, fret);
+            const note = window.SlimSolo.Instruments.getStringNote(state.tuning, stringIndex, fret);
             if (window.SlimSolo.MusicTheory.isNoteInScale(note, scaleNotes)) {
               const interval = window.SlimSolo.MusicTheory.getInterval(state.rootNote, note);
               notePositions.push({
@@ -367,6 +539,7 @@
 
         return { scaleNotes, notePositions };
       }, [
+        state.tuning,
         state.rootNote,
         state.scale,
         state.mode,
@@ -380,7 +553,7 @@
 
         state.fretStates.forEach((fretState, key) => {
           const [string, fret] = key.split('-').map(Number);
-          const note = window.SlimSolo.Instruments.getStringNote(string, fret);
+          const note = window.SlimSolo.Instruments.getStringNote(state.tuning, string, fret);
           const noteName = note.replace(/\d+/, '');
 
           if (fretState === 'blue-circle' || fretState === 'blue-solid') {
@@ -389,7 +562,7 @@
         });
 
         return Array.from(notes);
-      }, [state.fretStates, state.rootNote]);
+      }, [state.tuning, state.fretStates, state.rootNote]);
 
       // Extract blue intervals from fretStates (for legacy compatibility)
       const blueIntervals = useMemo(() => {
@@ -398,7 +571,7 @@
 
         state.fretStates.forEach((fretState, key) => {
           const [string, fret] = key.split('-').map(Number);
-          const note = window.SlimSolo.Instruments.getStringNote(string, fret);
+          const note = window.SlimSolo.Instruments.getStringNote(state.tuning, string, fret);
           const noteName = note.replace(/\d+/, '');
           const interval = window.SlimSolo.MusicTheory.getInterval(state.rootNote, noteName);
 
@@ -408,7 +581,7 @@
         });
 
         return Array.from(blue).sort((a, b) => a - b);
-      }, [state.fretStates, state.rootNote]);
+      }, [state.tuning, state.fretStates, state.rootNote]);
 
       // Detect scale from intervals in CURRENT root only (for dropdown)
       const detectedScale = useMemo(() => {
@@ -458,17 +631,21 @@
       }, []);
 
       // Combine state with computed values for rendering
-      const renderState = useMemo(() => ({
-        ...state,
-        stringCount: window.SlimSolo.Instruments.STRING_COUNT,
-        tuning: window.SlimSolo.Instruments.BASS_TUNING,
-        scaleNotes,
-        notePositions,
-        mainListMatches,
-        blueIntervals,
-        detectedScale,
-        detectedScales
-      }), [
+      const renderState = useMemo(() => {
+        const tuningData = window.SlimSolo.Instruments.getTuning(state.tuning);
+        return {
+          ...state,
+          stringCount: tuningData.strings.length,
+          tuningStrings: tuningData.strings,
+          tuningName: tuningData.name,
+          scaleNotes,
+          notePositions,
+          mainListMatches,
+          blueIntervals,
+          detectedScale,
+          detectedScales
+        };
+      }, [
         state,
         scaleNotes,
         notePositions,
@@ -479,19 +656,12 @@
       ]);
 
       // Render canvas when visual data changes
+      // Note: renderState already includes all visual state, so only it is needed as dependency
       useEffect(() => {
         if (canvasRef.current && window.SlimSolo.FretboardCanvas) {
           window.SlimSolo.FretboardCanvas.render(renderState);
         }
-      }, [
-        renderState,
-        notePositions,
-        state.theme,
-        state.fretCount,
-        state.displayMode,
-        state.showAllOpenStrings,
-        state.fretStates
-      ]);
+      }, [renderState]);
 
       // Handle window resize
       const renderStateRef = useRef(renderState);
@@ -511,52 +681,90 @@
         return () => window.removeEventListener('resize', handleResize);
       }, []);
 
+      // Resize canvas when sidebar opens/closes (push layout)
+      useEffect(() => {
+        // Small delay to let CSS transition complete
+        const timer = setTimeout(() => {
+          if (canvasRef.current && window.SlimSolo.FretboardCanvas) {
+            window.SlimSolo.FretboardCanvas.resize();
+            window.SlimSolo.FretboardCanvas.render(renderStateRef.current);
+          }
+        }, 350);
+        return () => clearTimeout(timer);
+      }, [sidebarOpen]);
+
+      // Resize canvas when menu layout changes
+      useEffect(() => {
+        const timer = setTimeout(() => {
+          if (canvasRef.current && window.SlimSolo.FretboardCanvas) {
+            window.SlimSolo.FretboardCanvas.resize();
+            window.SlimSolo.FretboardCanvas.render(renderStateRef.current);
+          }
+        }, 50);
+        return () => clearTimeout(timer);
+      }, [state.menuLayout]);
+
       // Handle note clicks from canvas - 3-state cycling (ALL octaves together)
+      // Uses stateRef only to check root note; nextState calculated in reducer for accuracy
       useEffect(() => {
         window.SlimSolo.onNoteClick = (string, fret) => {
-          const note = window.SlimSolo.Instruments.getStringNote(string, fret);
+          const currentState = stateRef.current;
+          const note = window.SlimSolo.Instruments.getStringNote(currentState.tuning, string, fret);
+          if (!note) return; // Null check for safety
           const noteName = note.replace(/\d+/, '');
 
-          if (noteName === state.rootNote) return;
+          // Don't allow clicking root notes
+          if (noteName === currentState.rootNote) return;
 
-          const key = `${string}-${fret}`;
-          const currentState = state.fretStates.get(key) || 'blank';
-
-          let nextState;
-          if (currentState === 'blank' || !currentState) {
-            nextState = 'blue-circle';
-          } else if (currentState === 'blue-circle') {
-            nextState = 'blue-solid';
-          } else if (currentState === 'blue-solid') {
-            nextState = 'blank';
-          } else {
-            nextState = 'blue-circle';
-          }
-
+          // Dispatch to reducer - nextState calculated there for correct batching
           dispatch({
             type: actions.CYCLE_FRET,
-            payload: { noteName, nextState, clickedString: string, clickedFret: fret }
+            payload: { noteName, clickedString: string, clickedFret: fret }
           });
         };
 
         return () => {
           window.SlimSolo.onNoteClick = null;
         };
-      }, [dispatch, state.rootNote, state.fretStates]);
+      }, [dispatch]); // Stable dependencies - uses stateRef only for root check
 
-      return html`
-        <div class="h-full flex">
-          <!-- Control Panel - 25% width -->
-          <div class="w-64 flex-shrink-0">
-            <${window.SlimSolo.ControlPanel.Component}
-              state=${renderState}
-              dispatch=${dispatch}
-              actions=${actions}
-            />
+      // Toggle sidebar visibility on mobile
+      const toggleSidebar = () => setSidebarOpen(!sidebarOpen);
+
+      // Sidebar layout (vertical menu on left)
+      if (state.menuLayout === 'sidebar') {
+        return html`
+          <div class="h-full flex">
+            <!-- Control Panel - sidebar -->
+            <div class="w-48 flex-shrink-0">
+              <${window.SlimSolo.ControlPanel.Component}
+                state=${renderState}
+                dispatch=${dispatch}
+                actions=${actions}
+                isMobile=${isMobile}
+              />
+            </div>
+
+            <!-- Canvas Container -->
+            <div id="canvas-container" class="flex-1 flex items-center justify-center p-1 bg-gray-50 dark:bg-gray-800">
+              <canvas id="fretboard-canvas" ref=${canvasRef}></canvas>
+            </div>
           </div>
+        `;
+      }
 
-          <!-- Canvas Container - 75% width -->
-          <div id="canvas-container" class="flex-1 flex items-center justify-center p-4 bg-gray-50 dark:bg-gray-800">
+      // Topbar layout (horizontal menu on top)
+      return html`
+        <div class="h-full flex flex-col">
+          <!-- Top Menu Bar -->
+          <${window.SlimSolo.ControlPanel.TopMenuBar}
+            state=${renderState}
+            dispatch=${dispatch}
+            actions=${actions}
+          />
+
+          <!-- Canvas Container - fills remaining space -->
+          <div id="canvas-container" class="flex-1 flex items-start justify-center pt-1 px-1 bg-gray-50 dark:bg-gray-800">
             <canvas id="fretboard-canvas" ref=${canvasRef}></canvas>
           </div>
         </div>

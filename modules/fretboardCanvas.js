@@ -6,15 +6,26 @@
   let currentTheme = 'light';
   let currentRenderState = null;
 
-  // Visual constants
+  // Visual constants - desktop defaults
   const NOTE_RADIUS = {
     STANDARD: 16,
     FIFTH: 18,
     ROOT: 20
   };
 
+  // Mobile-specific larger note radii for touch
+  const NOTE_RADIUS_MOBILE = {
+    STANDARD: 20,
+    FIFTH: 22,
+    ROOT: 24
+  };
+
   const OPEN_STRING_X_OFFSET = -20;
   const OPEN_STRING_LABEL_X_OFFSET = -35;
+
+  // Click detection radius (larger on mobile for touch)
+  const CLICK_RADIUS = 25;
+  const CLICK_RADIUS_MOBILE = 40;
 
   const themes = {
     light: {
@@ -40,6 +51,11 @@
   };
 
   function init(canvasElement) {
+    // Clean up any existing listeners first
+    if (canvas) {
+      dispose();
+    }
+
     canvas = canvasElement;
     ctx = canvas.getContext('2d');
     setupCanvas();
@@ -48,14 +64,24 @@
     canvas.addEventListener('mousemove', handleCanvasHover);
   }
 
+  function dispose() {
+    if (canvas) {
+      canvas.removeEventListener('click', handleCanvasClick);
+      canvas.removeEventListener('mousemove', handleCanvasHover);
+    }
+    currentRenderState = null;
+  }
+
   function setupCanvas() {
     const container = canvas.parentElement;
     const dpr = window.devicePixelRatio || 1;
 
-    canvas.width = (container.clientWidth - 64) * dpr;
-    canvas.height = (container.clientHeight - 64) * dpr;
-    canvas.style.width = `${container.clientWidth - 64}px`;
-    canvas.style.height = `${container.clientHeight - 64}px`;
+    // Minimal margin around canvas (4px total)
+    const margin = 4;
+    canvas.width = (container.clientWidth - margin) * dpr;
+    canvas.height = (container.clientHeight - margin) * dpr;
+    canvas.style.width = `${container.clientWidth - margin}px`;
+    canvas.style.height = `${container.clientHeight - margin}px`;
 
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.scale(dpr, dpr);
@@ -67,16 +93,28 @@
     const displayWidth = canvas.width / (window.devicePixelRatio || 1);
     const displayHeight = canvas.height / (window.devicePixelRatio || 1);
 
+    // Mobile detection: landscape phone (height < 500px)
+    const isMobile = window.innerHeight < 500;
+
+    // Responsive padding: smaller on mobile
+    const padding = isMobile
+      ? { top: 25, right: 25, bottom: 25, left: 35 }
+      : { top: 60, right: 60, bottom: 60, left: 80 };
+
+    const horizontalPadding = padding.left + padding.right;
+    const verticalPadding = padding.top + padding.bottom;
+
     layout = {
-      padding: { top: 60, right: 60, bottom: 60, left: 80 },
+      padding,
       width: displayWidth,
       height: displayHeight,
-      fretboardWidth: displayWidth - 140,
-      fretboardHeight: displayHeight - 120,
-      nutWidth: 8,
+      fretboardWidth: displayWidth - horizontalPadding,
+      fretboardHeight: displayHeight - verticalPadding,
+      nutWidth: isMobile ? 4 : 8,
       stringSpacing: 0,
       fretPositions: [],
-      fretCount: 21
+      fretCount: 21,
+      isMobile
     };
   }
 
@@ -95,7 +133,8 @@
   function findNoteAtPosition(x, y) {
     if (!currentRenderState || !currentRenderState.notePositions) return null;
 
-    const clickRadius = 25;
+    // Use larger click radius on mobile for touch
+    const clickRadius = layout.isMobile ? CLICK_RADIUS_MOBILE : CLICK_RADIUS;
 
     for (const note of currentRenderState.notePositions) {
       const noteX = getNoteX(note.fret);
@@ -119,7 +158,8 @@
 
     if (!currentRenderState || !window.SlimSolo.onNoteClick) return;
 
-    const clickRadius = 25;
+    // Use larger click radius on mobile for touch
+    const clickRadius = layout.isMobile ? CLICK_RADIUS_MOBILE : CLICK_RADIUS;
     const stringCount = currentRenderState.stringCount || 6;
 
     // Check all fret positions (chromatic)
@@ -284,21 +324,24 @@
     const stringCount = state.stringCount || 6;
     const fretStates = state.fretStates || new Map();
 
+    // Use larger note radii on mobile for touch
+    const radii = layout.isMobile ? NOTE_RADIUS_MOBILE : NOTE_RADIUS;
+
     for (let stringIndex = 0; stringIndex < stringCount; stringIndex++) {
       for (let fret = 0; fret <= state.fretCount; fret++) {
         const key = `${stringIndex}-${fret}`;
         const fretState = fretStates.get(key);
-        const note = window.SlimSolo.Instruments.getStringNote(stringIndex, fret);
-        const noteName = note.replace(/\d+/, '');
+        const note = window.SlimSolo.Instruments.getStringNote(state.tuning, stringIndex, fret);
+        const noteName = note ? note.replace(/\d+/, '') : '';
         const isRoot = noteName === state.rootNote;
         const pos = { string: stringIndex, fret };
 
         if (isRoot) {
-          drawSolidNote(pos, colors.root, NOTE_RADIUS.ROOT, stringCount);
+          drawSolidNote(pos, colors.root, radii.ROOT, stringCount);
         } else if (fretState === 'blue-circle') {
-          drawRingNote(pos, colors.blueCircle, NOTE_RADIUS.STANDARD, stringCount, colors.fretboard);
+          drawRingNote(pos, colors.blueCircle, radii.STANDARD, stringCount, colors.fretboard);
         } else if (fretState === 'blue-solid') {
-          drawSolidNote(pos, colors.blueSolid, NOTE_RADIUS.STANDARD, stringCount);
+          drawSolidNote(pos, colors.blueSolid, radii.STANDARD, stringCount);
         }
       }
     }
@@ -318,8 +361,8 @@
       for (let fret = 0; fret <= state.fretCount; fret++) {
         const key = `${stringIndex}-${fret}`;
         const fretState = fretStates.get(key);
-        const note = window.SlimSolo.Instruments.getStringNote(stringIndex, fret);
-        const noteName = note.replace(/\d+/, '');
+        const note = window.SlimSolo.Instruments.getStringNote(state.tuning, stringIndex, fret);
+        const noteName = note ? note.replace(/\d+/, '') : '';
         const isRoot = noteName === state.rootNote;
 
         if (isRoot || fretState === 'blue-solid' || fretState === 'blue-circle') {
@@ -328,21 +371,23 @@
           const interval = window.SlimSolo.MusicTheory.getInterval(state.rootNote, noteName);
 
           let label = '';
-          switch (state.displayMode) {
-            case 'notes':
-              label = noteName;
-              break;
-            case 'intervals':
-              const intervalNames = ['1', 'm2', 'M2', 'm3', 'M3', 'P4', 'd5', 'P5', 'm6', 'M6', 'm7', 'M7'];
-              label = intervalNames[interval] || '';
-              break;
-            case 'semitones':
-              label = interval.toString();
-              break;
-            case 'semitonesString':
-              if (isRoot) {
-                label = "0";
-              } else {
+
+          // Root note always shows note name regardless of display mode
+          if (isRoot) {
+            label = noteName;
+          } else {
+            switch (state.displayMode) {
+              case 'notes':
+                label = noteName;
+                break;
+              case 'intervals':
+                const intervalNames = ['1', 'm2', 'M2', 'm3', 'M3', 'P4', 'd5', 'P5', 'm6', 'M6', 'm7', 'M7'];
+                label = intervalNames[interval] || '';
+                break;
+              case 'semitones':
+                label = interval.toString();
+                break;
+              case 'semitonesString':
                 if (interval >= 0 && interval <= 4) {
                   label = interval.toString();
                 } else if (interval >= 5 && interval <= 9) {
@@ -350,8 +395,8 @@
                 } else if (interval >= 10 && interval <= 11) {
                   label = (interval - 10).toString();
                 }
-              }
-              break;
+                break;
+            }
           }
 
           if (label) {
@@ -384,6 +429,7 @@
     init,
     render,
     resize,
+    dispose,
     themes
   };
 })();
