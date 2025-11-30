@@ -34,7 +34,7 @@
       strings: '#808080',
       blueCircle: '#3B82F6',
       blueSolid: '#3B82F6',
-      root: '#DC2626',
+      rootColor: '#16A34A',        // Green for root (both states)
       markers: '#D1D5DB',
       text: '#111827'
     },
@@ -44,7 +44,7 @@
       strings: '#6B7280',
       blueCircle: '#60A5FA',
       blueSolid: '#60A5FA',
-      root: '#EF4444',
+      rootColor: '#22C55E',        // Green for root (both states)
       markers: '#374151',
       text: '#F9FAFB'
     }
@@ -200,7 +200,8 @@
     const colors = themes[currentTheme];
 
     layout.fretCount = state.fretCount || 21;
-    layout.stringSpacing = layout.fretboardHeight / (state.stringCount + 1);
+    // String spacing: full between strings, half at edges (saves vertical space)
+    layout.stringSpacing = layout.fretboardHeight / (state.stringCount - 1 + 1); // = fretboardHeight / stringCount
     layout.fretPositions = calculateFretPositions(layout.fretCount);
 
     ctx.clearRect(0, 0, layout.width, layout.height);
@@ -258,8 +259,9 @@
         const x = layout.padding.left + layout.nutWidth + (fret - 0.5) * fretSpacing;
 
         if (doubleMarkers.includes(fret)) {
-          const y1 = layout.padding.top + layout.stringSpacing * 1.5;
-          const y2 = layout.padding.top + layout.fretboardHeight - layout.stringSpacing * 1.5;
+          // Position between 1st-2nd strings and between 5th-6th strings (with half-edge spacing)
+          const y1 = layout.padding.top + layout.stringSpacing * 1;
+          const y2 = layout.padding.top + layout.fretboardHeight - layout.stringSpacing * 1;
 
           ctx.beginPath();
           ctx.arc(x, y1, 6, 0, Math.PI * 2);
@@ -282,7 +284,8 @@
     ctx.strokeStyle = colors.strings;
 
     for (let i = 0; i < stringCount; i++) {
-      const y = layout.padding.top + (stringCount - i) * layout.stringSpacing;
+      // Use same Y calculation as getNoteY (half spacing at edges)
+      const y = layout.padding.top + layout.stringSpacing * (stringCount - 0.5 - i);
       const thickness = 1 + i * 0.3;
       ctx.lineWidth = thickness;
 
@@ -327,6 +330,13 @@
     // Use larger note radii on mobile for touch
     const radii = layout.isMobile ? NOTE_RADIUS_MOBILE : NOTE_RADIUS;
 
+    // Determine if scale is undefined (manually edited but no scale detected)
+    const isScaleUndefined = state.isManuallyEdited && state.detectedScale === null;
+
+    // Store root positions for label drawing later
+    layout.rootPositions = [];
+    layout.isScaleUndefined = isScaleUndefined;
+
     for (let stringIndex = 0; stringIndex < stringCount; stringIndex++) {
       for (let fret = 0; fret <= state.fretCount; fret++) {
         const key = `${stringIndex}-${fret}`;
@@ -337,7 +347,13 @@
         const pos = { string: stringIndex, fret };
 
         if (isRoot) {
-          drawSolidNote(pos, colors.root, radii.ROOT, stringCount);
+          // Root: green circle when undefined, green solid when scale detected
+          if (isScaleUndefined) {
+            drawRingNote(pos, colors.rootColor, radii.ROOT, stringCount, colors.fretboard);
+          } else {
+            drawSolidNote(pos, colors.rootColor, radii.ROOT, stringCount);
+          }
+          layout.rootPositions.push({ pos, noteName });
         } else if (fretState === 'blue-circle') {
           drawRingNote(pos, colors.blueCircle, radii.STANDARD, stringCount, colors.fretboard);
         } else if (fretState === 'blue-solid') {
@@ -400,7 +416,12 @@
           }
 
           if (label) {
-            ctx.fillStyle = isRoot ? 'white' : colors.text;
+            // Root label: theme-aware on green circle (undefined), white on green solid (defined)
+            if (isRoot) {
+              ctx.fillStyle = layout.isScaleUndefined ? (currentTheme === 'dark' ? 'white' : '#111827') : 'white';
+            } else {
+              ctx.fillStyle = colors.text;
+            }
             ctx.fillText(label, x, y);
           }
         }
@@ -417,11 +438,68 @@
   }
 
   function getNoteY(stringIndex, stringCount) {
-    return layout.padding.top + (stringCount - stringIndex) * layout.stringSpacing;
+    // Half spacing at edges: top string at 0.5*spacing, bottom string at height - 0.5*spacing
+    return layout.padding.top + layout.stringSpacing * (stringCount - 0.5 - stringIndex);
   }
 
   function resize() {
     setupCanvas();
+  }
+
+  // Radial pulse wave effect when scale is detected (transition from undefined to defined)
+  function flashScaleDetected() {
+    if (!canvas) return;
+
+    const container = canvas.parentElement;
+    if (!container) return;
+
+    // Ensure container has position for absolute child
+    const originalPosition = container.style.position;
+    const originalOverflow = container.style.overflow;
+    if (!originalPosition || originalPosition === 'static') {
+      container.style.position = 'relative';
+    }
+    container.style.overflow = 'hidden';
+
+    // Create radial pulse element
+    const pulse = document.createElement('div');
+    const size = Math.max(container.clientWidth, container.clientHeight) * 2;
+
+    pulse.style.cssText = `
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: ${size}px;
+      height: ${size}px;
+      margin-left: -${size / 2}px;
+      margin-top: -${size / 2}px;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(34, 197, 94, 0.4) 0%, rgba(34, 197, 94, 0) 70%);
+      pointer-events: none;
+      transform: scale(0);
+      opacity: 1;
+    `;
+
+    container.appendChild(pulse);
+
+    // Animate the pulse
+    pulse.animate([
+      { transform: 'scale(0)', opacity: 1 },
+      { transform: 'scale(1)', opacity: 0 }
+    ], {
+      duration: 800,
+      easing: 'ease-out',
+      fill: 'forwards'
+    });
+
+    // Remove after animation
+    setTimeout(() => {
+      pulse.remove();
+      if (!originalPosition || originalPosition === 'static') {
+        container.style.position = originalPosition || '';
+      }
+      container.style.overflow = originalOverflow || '';
+    }, 850);
   }
 
   window.SlimSolo = window.SlimSolo || {};
@@ -430,6 +508,7 @@
     render,
     resize,
     dispose,
-    themes
+    themes,
+    flashScaleDetected
   };
 })();

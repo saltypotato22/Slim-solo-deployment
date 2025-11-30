@@ -809,9 +809,9 @@
   }
 
   function ControlPanel({ state, dispatch, actions, isMobile = false, onClose }) {
-    // Mobile: compact spacing, extra padding for hamburger button
+    // Compact spacing for all sidebar modes (no extra top padding needed in push layout)
     const containerClass = isMobile
-      ? 'w-full h-full p-2 pt-14 space-y-2 overflow-y-auto bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-700'
+      ? 'w-full h-full p-2 space-y-2 overflow-y-auto bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-700'
       : 'w-full h-full p-3 space-y-3 overflow-y-auto bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-700';
 
     return html`

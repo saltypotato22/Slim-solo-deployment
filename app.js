@@ -590,6 +590,23 @@
         return window.SlimSolo.MusicTheory.detectScaleFromIntervals(blueIntervals);
       }, [state.isManuallyEdited, blueIntervals]);
 
+      // Track previous detectedScale to detect transitions
+      const prevDetectedScaleRef = useRef(detectedScale);
+
+      // Flash effect when scale transitions from undefined to defined
+      useEffect(() => {
+        const prevScale = prevDetectedScaleRef.current;
+        const wasUndefined = state.isManuallyEdited && prevScale === null;
+        const isNowDefined = state.isManuallyEdited && detectedScale !== null;
+
+        // Only flash when transitioning FROM undefined TO defined (not on initial load)
+        if (wasUndefined && isNowDefined && prevScale !== detectedScale) {
+          window.SlimSolo.FretboardCanvas.flashScaleDetected();
+        }
+
+        prevDetectedScaleRef.current = detectedScale;
+      }, [detectedScale, state.isManuallyEdited]);
+
       // Detect ALL equivalent scales across ALL roots (for clickable list)
       const detectedScales = useMemo(() => {
         // Wait for CSV to load
@@ -745,8 +762,8 @@
               />
             </div>
 
-            <!-- Canvas Container -->
-            <div id="canvas-container" class="flex-1 flex items-center justify-center p-1 bg-gray-50 dark:bg-gray-800">
+            <!-- Canvas Container - align to top -->
+            <div id="canvas-container" class="flex-1 flex items-start justify-center pt-1 px-1 bg-gray-50 dark:bg-gray-800">
               <canvas id="fretboard-canvas" ref=${canvasRef}></canvas>
             </div>
           </div>
