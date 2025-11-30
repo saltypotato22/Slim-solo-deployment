@@ -70,8 +70,8 @@
       scale: 'major',
       mode: 'ionian',
       rootNote: 'E',
-      fretCount: 16,
-      displayMode: 'notes',
+      fretCount: 8,
+      displayMode: 'semitones',
       showAllOpenStrings: true,
       theme: 'light',
       panelCollapsed: false,
@@ -348,8 +348,23 @@
     function App() {
       const [state, dispatch] = useReducer(stateReducer, initialState);
       const [equivalentsLoaded, setEquivalentsLoaded] = useState(false);
+      const [isMobile, setIsMobile] = useState(false);
+      const [sidebarOpen, setSidebarOpen] = useState(false);
       const canvasRef = useRef(null);
       const stateRef = useRef(state);
+
+      // Detect mobile (landscape phone: height < 500px)
+      useEffect(() => {
+        const checkMobile = () => {
+          const mobile = window.innerHeight < 500;
+          setIsMobile(mobile);
+          // Auto-close sidebar when switching to mobile
+          if (mobile) setSidebarOpen(false);
+        };
+        checkMobile();
+        window.addEventListener('resize', checkMobile);
+        return () => window.removeEventListener('resize', checkMobile);
+      }, []);
 
       // Keep stateRef in sync with state
       useEffect(() => {
@@ -565,6 +580,18 @@
         return () => window.removeEventListener('resize', handleResize);
       }, []);
 
+      // Resize canvas when sidebar opens/closes (push layout)
+      useEffect(() => {
+        // Small delay to let CSS transition complete
+        const timer = setTimeout(() => {
+          if (canvasRef.current && window.SlimSolo.FretboardCanvas) {
+            window.SlimSolo.FretboardCanvas.resize();
+            window.SlimSolo.FretboardCanvas.render(renderStateRef.current);
+          }
+        }, 350);
+        return () => clearTimeout(timer);
+      }, [sidebarOpen]);
+
       // Handle note clicks from canvas - 3-state cycling (ALL octaves together)
       // Uses stateRef only to check root note; nextState calculated in reducer for accuracy
       useEffect(() => {
@@ -589,19 +616,40 @@
         };
       }, [dispatch]); // Stable dependencies - uses stateRef only for root check
 
+      // Toggle sidebar visibility on mobile
+      const toggleSidebar = () => setSidebarOpen(!sidebarOpen);
+
       return html`
         <div class="h-full flex">
-          <!-- Control Panel - 25% width -->
-          <div class="w-64 flex-shrink-0">
+          <!-- Mobile: Toggle button (visible when sidebar closed) -->
+          ${isMobile && !sidebarOpen && html`
+            <button
+              class="sidebar-toggle"
+              onClick=${toggleSidebar}
+              aria-label="Open menu"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M3 12h18M3 6h18M3 18h18"/>
+              </svg>
+            </button>
+          `}
+
+          <!-- Control Panel - pushes canvas when open -->
+          <div class="${isMobile
+            ? (sidebarOpen ? 'w-64 flex-shrink-0 sidebar-push' : 'w-0 overflow-hidden sidebar-push')
+            : 'w-64 flex-shrink-0'
+          }">
             <${window.SlimSolo.ControlPanel.Component}
               state=${renderState}
               dispatch=${dispatch}
               actions=${actions}
+              isMobile=${isMobile}
+              onClose=${() => setSidebarOpen(false)}
             />
           </div>
 
-          <!-- Canvas Container - 75% width -->
-          <div id="canvas-container" class="flex-1 flex items-center justify-center p-4 bg-gray-50 dark:bg-gray-800">
+          <!-- Canvas Container - resizes when sidebar opens/closes -->
+          <div id="canvas-container" class="flex-1 flex items-center justify-center ${isMobile ? 'p-2' : 'p-4'} bg-gray-50 dark:bg-gray-800">
             <canvas id="fretboard-canvas" ref=${canvasRef}></canvas>
           </div>
         </div>
