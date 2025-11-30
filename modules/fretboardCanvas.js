@@ -4,6 +4,7 @@
   let canvas, ctx;
   let layout = {};
   let currentTheme = 'light';
+  let currentMenuLayout = 'sidebar';  // Track layout mode for resize
   let currentRenderState = null;
 
   // Visual constants - desktop defaults
@@ -58,7 +59,7 @@
 
     canvas = canvasElement;
     ctx = canvas.getContext('2d');
-    setupCanvas();
+    setupCanvas(currentMenuLayout);
 
     canvas.addEventListener('click', handleCanvasClick);
     canvas.addEventListener('mousemove', handleCanvasHover);
@@ -72,16 +73,39 @@
     currentRenderState = null;
   }
 
-  function setupCanvas() {
+  // UI element sizes for viewport calculation
+  const UI_SIZES = {
+    SIDEBAR_WIDTH: 192,  // w-48 = 12rem = 192px
+    TOPBAR_HEIGHT: 130,  // Topbar height (can be 2 rows on narrow screens)
+    MARGIN: 8            // Small margin around canvas
+  };
+
+  function setupCanvas(menuLayout) {
     const container = canvas.parentElement;
     const dpr = window.devicePixelRatio || 1;
 
-    // Minimal margin around canvas (4px total)
-    const margin = 4;
-    canvas.width = (container.clientWidth - margin) * dpr;
-    canvas.height = (container.clientHeight - margin) * dpr;
-    canvas.style.width = `${container.clientWidth - margin}px`;
-    canvas.style.height = `${container.clientHeight - margin}px`;
+    // Get viewport constraints (hard limits - never exceed these)
+    const viewportWidth = window.innerWidth;
+    const viewportHeight = window.innerHeight;
+
+    // Calculate available space based on layout mode
+    const isSidebarMode = menuLayout === 'sidebar';
+    const maxWidth = isSidebarMode
+      ? viewportWidth - UI_SIZES.SIDEBAR_WIDTH - UI_SIZES.MARGIN
+      : viewportWidth - UI_SIZES.MARGIN;
+    const maxHeight = isSidebarMode
+      ? viewportHeight - UI_SIZES.MARGIN
+      : viewportHeight - UI_SIZES.TOPBAR_HEIGHT - UI_SIZES.MARGIN;
+
+    // Use minimum of container size and viewport constraint
+    const availableWidth = Math.min(container.clientWidth, maxWidth);
+    const availableHeight = Math.min(container.clientHeight, maxHeight);
+
+    // Set canvas size (constrained by viewport)
+    canvas.width = availableWidth * dpr;
+    canvas.height = availableHeight * dpr;
+    canvas.style.width = `${availableWidth}px`;
+    canvas.style.height = `${availableHeight}px`;
 
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.scale(dpr, dpr);
@@ -197,6 +221,14 @@
     currentRenderState = state;
     window.lastRenderState = state;
     currentTheme = state.theme || 'light';
+
+    // Track menu layout and resize canvas if it changed
+    const newMenuLayout = state.menuLayout || 'sidebar';
+    if (newMenuLayout !== currentMenuLayout) {
+      currentMenuLayout = newMenuLayout;
+      setupCanvas(currentMenuLayout);
+    }
+
     const colors = themes[currentTheme];
 
     layout.fretCount = state.fretCount || 21;
@@ -443,7 +475,7 @@
   }
 
   function resize() {
-    setupCanvas();
+    setupCanvas(currentMenuLayout);
   }
 
   // Radial pulse wave effect when scale is detected (transition from undefined to defined)
