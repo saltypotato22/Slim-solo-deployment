@@ -70,8 +70,8 @@
       scale: 'major',
       mode: 'ionian',
       rootNote: 'E',
-      fretCount: 8,
-      displayMode: 'semitones',
+      fretCount: 16,
+      displayMode: 'notes',
       showAllOpenStrings: true,
       theme: 'light',
       panelCollapsed: false,
@@ -103,7 +103,6 @@
       for (let string = 0; string < stringCount; string++) {
         for (let fret = 0; fret <= fretCount; fret++) {
           const note = window.SlimSolo.Instruments.getStringNote(string, fret);
-          if (!note) continue; // Null check for safety
           const noteName = note.replace(/\d+/, '');
 
           if (noteName === rootNote) continue;
@@ -147,7 +146,6 @@
           for (let s = 0; s < stringCount; s++) {
             for (let f = 0; f <= state.fretCount; f++) {
               const note = window.SlimSolo.Instruments.getStringNote(s, f);
-              if (!note) continue; // Null check for safety
               const noteName = note.replace(/\d+/, '');
               const posKey = `${s}-${f}`;
 
@@ -190,36 +188,24 @@
           return { ...state, displayMode: action.payload };
         case actions.TOGGLE_ALL_OPEN_STRINGS:
           return { ...state, showAllOpenStrings: !state.showAllOpenStrings };
-        case actions.SET_THEME:
-          // Pure reducer - side effects moved to useEffect
-          return { ...state, theme: action.payload };
+        case actions.SET_THEME: {
+          const newTheme = action.payload;
+          document.documentElement.className = newTheme;
+          localStorage.setItem('theme', newTheme);
+          return { ...state, theme: newTheme };
+        }
         case actions.TOGGLE_PANEL:
           return { ...state, panelCollapsed: !state.panelCollapsed };
         case actions.CYCLE_FRET: {
-          const { noteName, clickedString, clickedFret } = action.payload;
+          const { noteName, nextState, clickedString, clickedFret } = action.payload;
           const newFretStates = new Map(state.fretStates);
           const stringCount = window.SlimSolo.Instruments.STRING_COUNT;
-
-          // Calculate nextState from CURRENT state (not stale ref)
-          const clickedKey = `${clickedString}-${clickedFret}`;
-          const currentState = state.fretStates.get(clickedKey) || 'blank';
-          let nextState;
-          if (currentState === 'blank') {
-            nextState = 'blue-circle';
-          } else if (currentState === 'blue-circle') {
-            nextState = 'blue-solid';
-          } else if (currentState === 'blue-solid') {
-            nextState = 'blank';
-          } else {
-            nextState = 'blue-circle';
-          }
 
           const isCircleState = nextState === 'blue-circle';
 
           for (let s = 0; s < stringCount; s++) {
             for (let f = 0; f <= state.fretCount; f++) {
               const note = window.SlimSolo.Instruments.getStringNote(s, f);
-              if (!note) continue; // Null check for safety
               const noteNameAtPos = note.replace(/\d+/, '');
 
               if (noteNameAtPos === noteName) {
@@ -253,54 +239,28 @@
           const { root, scale, mode } = action.payload;
           const newScale = scale || mode;
           const newMode = mode || newScale;
-          const oldRoot = state.rootNote;
-          const newRoot = root;
-          const stringCount = window.SlimSolo.Instruments.STRING_COUNT;
 
           // Get the notes in the new scale
-          const newScaleNotes = window.SlimSolo.MusicTheory.getScaleNotes(newRoot, newScale, newMode);
+          const newScaleNotes = window.SlimSolo.MusicTheory.getScaleNotes(root, newScale, newMode);
 
-          // Start with filtered fretStates (only notes in new scale)
+          // Filter fretStates to only keep notes in the new scale (preserve circle/solid state)
           const newFretStates = new Map();
           state.fretStates.forEach((value, key) => {
             const [string, fret] = key.split('-').map(Number);
             const note = window.SlimSolo.Instruments.getStringNote(string, fret);
-            if (!note) return;
 
             if (window.SlimSolo.MusicTheory.isNoteInScale(note, newScaleNotes)) {
-              newFretStates.set(key, value);
+              newFretStates.set(key, value); // Keep this fret with its current state
             }
+            // Otherwise, don't add it (remove it from fretStates)
           });
-
-          // Handle root change: old root becomes blue-circle, new root removed from fretStates
-          if (oldRoot !== newRoot) {
-            for (let s = 0; s < stringCount; s++) {
-              for (let f = 0; f <= state.fretCount; f++) {
-                const note = window.SlimSolo.Instruments.getStringNote(s, f);
-                if (!note) continue;
-                const noteName = note.replace(/\d+/, '');
-                const posKey = `${s}-${f}`;
-
-                // Old root becomes blue-circle (if it's in the new scale)
-                if (noteName === oldRoot && window.SlimSolo.MusicTheory.isNoteInScale(note, newScaleNotes)) {
-                  newFretStates.set(posKey, 'blue-circle');
-                }
-
-                // New root removed from fretStates (roots are never in fretStates)
-                if (noteName === newRoot) {
-                  newFretStates.delete(posKey);
-                }
-              }
-            }
-          }
 
           return {
             ...state,
-            rootNote: newRoot,
+            rootNote: root,
             scale: newScale,
             mode: newMode,
-            fretStates: newFretStates,
-            isManuallyEdited: true
+            fretStates: newFretStates
           };
         }
         case actions.SET_FROM_EQUIVALENT: {
@@ -315,7 +275,6 @@
           for (let s = 0; s < stringCount; s++) {
             for (let f = 0; f <= state.fretCount; f++) {
               const note = window.SlimSolo.Instruments.getStringNote(s, f);
-              if (!note) continue; // Null check for safety
               const noteName = note.replace(/\d+/, '');
               const posKey = `${s}-${f}`;
 
@@ -348,54 +307,25 @@
     function App() {
       const [state, dispatch] = useReducer(stateReducer, initialState);
       const [equivalentsLoaded, setEquivalentsLoaded] = useState(false);
-      const [isMobile, setIsMobile] = useState(false);
-      const [sidebarOpen, setSidebarOpen] = useState(false);
       const canvasRef = useRef(null);
       const stateRef = useRef(state);
-
-      // Detect mobile (landscape phone: height < 500px)
-      useEffect(() => {
-        const checkMobile = () => {
-          const mobile = window.innerHeight < 500;
-          setIsMobile(mobile);
-          // Auto-close sidebar when switching to mobile
-          if (mobile) setSidebarOpen(false);
-        };
-        checkMobile();
-        window.addEventListener('resize', checkMobile);
-        return () => window.removeEventListener('resize', checkMobile);
-      }, []);
 
       // Keep stateRef in sync with state
       useEffect(() => {
         stateRef.current = state;
       }, [state]);
 
-      // Load equivalent scales CSV at startup with retry logic
-      const [csvLoadError, setCsvLoadError] = useState(null);
-
+      // Load equivalent scales CSV at startup
       useEffect(() => {
-        const loadWithRetry = async (maxRetries = 3) => {
-          for (let attempt = 1; attempt <= maxRetries; attempt++) {
-            try {
-              await window.SlimSolo.EquivalentScalesData.loadEquivalents();
-              setEquivalentsLoaded(true);
-              setCsvLoadError(null);
-              return; // Success
-            } catch (err) {
-              console.warn(`CSV load attempt ${attempt}/${maxRetries} failed:`, err.message);
-              if (attempt === maxRetries) {
-                setCsvLoadError(`Failed to load scale data: ${err.message}`);
-                setEquivalentsLoaded(false);
-              } else {
-                // Wait before retry (exponential backoff: 1s, 2s, 4s)
-                await new Promise(r => setTimeout(r, 1000 * Math.pow(2, attempt - 1)));
-              }
-            }
-          }
-        };
-
-        loadWithRetry();
+        window.SlimSolo.EquivalentScalesData.loadEquivalents()
+          .then(() => {
+            setEquivalentsLoaded(true);
+            console.log('Equivalent scales data loaded successfully');
+          })
+          .catch(err => {
+            console.error('Failed to load equivalent scales:', err.message);
+            setEquivalentsLoaded(false);
+          });
       }, []);
 
       // Load saved preferences and initialize fretStates
@@ -407,12 +337,6 @@
 
         dispatch({ type: actions.SET_SCALE, payload: initialState.scale });
       }, []);
-
-      // Theme side effects (moved from reducer for purity)
-      useEffect(() => {
-        document.documentElement.className = state.theme;
-        localStorage.setItem('theme', state.theme);
-      }, [state.theme]);
 
       // Calculate scale notes and positions with useMemo
       const { scaleNotes, notePositions } = useMemo(() => {
@@ -555,12 +479,19 @@
       ]);
 
       // Render canvas when visual data changes
-      // Note: renderState already includes all visual state, so only it is needed as dependency
       useEffect(() => {
         if (canvasRef.current && window.SlimSolo.FretboardCanvas) {
           window.SlimSolo.FretboardCanvas.render(renderState);
         }
-      }, [renderState]);
+      }, [
+        renderState,
+        notePositions,
+        state.theme,
+        state.fretCount,
+        state.displayMode,
+        state.showAllOpenStrings,
+        state.fretStates
+      ]);
 
       // Handle window resize
       const renderStateRef = useRef(renderState);
@@ -580,76 +511,52 @@
         return () => window.removeEventListener('resize', handleResize);
       }, []);
 
-      // Resize canvas when sidebar opens/closes (push layout)
-      useEffect(() => {
-        // Small delay to let CSS transition complete
-        const timer = setTimeout(() => {
-          if (canvasRef.current && window.SlimSolo.FretboardCanvas) {
-            window.SlimSolo.FretboardCanvas.resize();
-            window.SlimSolo.FretboardCanvas.render(renderStateRef.current);
-          }
-        }, 350);
-        return () => clearTimeout(timer);
-      }, [sidebarOpen]);
-
       // Handle note clicks from canvas - 3-state cycling (ALL octaves together)
-      // Uses stateRef only to check root note; nextState calculated in reducer for accuracy
       useEffect(() => {
         window.SlimSolo.onNoteClick = (string, fret) => {
-          const currentState = stateRef.current;
           const note = window.SlimSolo.Instruments.getStringNote(string, fret);
-          if (!note) return; // Null check for safety
           const noteName = note.replace(/\d+/, '');
 
-          // Don't allow clicking root notes
-          if (noteName === currentState.rootNote) return;
+          if (noteName === state.rootNote) return;
 
-          // Dispatch to reducer - nextState calculated there for correct batching
+          const key = `${string}-${fret}`;
+          const currentState = state.fretStates.get(key) || 'blank';
+
+          let nextState;
+          if (currentState === 'blank' || !currentState) {
+            nextState = 'blue-circle';
+          } else if (currentState === 'blue-circle') {
+            nextState = 'blue-solid';
+          } else if (currentState === 'blue-solid') {
+            nextState = 'blank';
+          } else {
+            nextState = 'blue-circle';
+          }
+
           dispatch({
             type: actions.CYCLE_FRET,
-            payload: { noteName, clickedString: string, clickedFret: fret }
+            payload: { noteName, nextState, clickedString: string, clickedFret: fret }
           });
         };
 
         return () => {
           window.SlimSolo.onNoteClick = null;
         };
-      }, [dispatch]); // Stable dependencies - uses stateRef only for root check
-
-      // Toggle sidebar visibility on mobile
-      const toggleSidebar = () => setSidebarOpen(!sidebarOpen);
+      }, [dispatch, state.rootNote, state.fretStates]);
 
       return html`
         <div class="h-full flex">
-          <!-- Mobile: Toggle button (visible when sidebar closed) -->
-          ${isMobile && !sidebarOpen && html`
-            <button
-              class="sidebar-toggle"
-              onClick=${toggleSidebar}
-              aria-label="Open menu"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M3 12h18M3 6h18M3 18h18"/>
-              </svg>
-            </button>
-          `}
-
-          <!-- Control Panel - pushes canvas when open -->
-          <div class="${isMobile
-            ? (sidebarOpen ? 'w-64 flex-shrink-0 sidebar-push' : 'w-0 overflow-hidden sidebar-push')
-            : 'w-64 flex-shrink-0'
-          }">
+          <!-- Control Panel - 25% width -->
+          <div class="w-64 flex-shrink-0">
             <${window.SlimSolo.ControlPanel.Component}
               state=${renderState}
               dispatch=${dispatch}
               actions=${actions}
-              isMobile=${isMobile}
-              onClose=${() => setSidebarOpen(false)}
             />
           </div>
 
-          <!-- Canvas Container - resizes when sidebar opens/closes -->
-          <div id="canvas-container" class="flex-1 flex items-center justify-center ${isMobile ? 'p-2' : 'p-4'} bg-gray-50 dark:bg-gray-800">
+          <!-- Canvas Container - 75% width -->
+          <div id="canvas-container" class="flex-1 flex items-center justify-center p-4 bg-gray-50 dark:bg-gray-800">
             <canvas id="fretboard-canvas" ref=${canvasRef}></canvas>
           </div>
         </div>

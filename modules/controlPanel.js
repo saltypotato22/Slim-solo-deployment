@@ -29,7 +29,7 @@
           Scale/Mode
         </label>
         <select
-          class="block w-full rounded-md border-gray-300 shadow-sm text-lg font-bold"
+          class="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-800 shadow-sm text-lg font-bold"
           value=${displayedScale}
           onChange=${handleScaleChange}
           aria-label="Select scale or mode"
@@ -95,11 +95,14 @@
         <div class="text-xs text-gray-600 dark:text-gray-400 mt-1 font-mono" aria-live="polite">
           Intervals: ${getScaleIntervals()}
         </div>
+        <div class="text-xs text-gray-600 dark:text-gray-400 mt-1 font-mono" aria-live="polite">
+          Pattern: ${getScalePattern()}
+        </div>
       </div>
     `;
   }
 
-  function EquivalentScalesDropdown({ detectedScales, dispatch, actions, theme }) {
+  function EquivalentScalesDropdown({ detectedScales, dispatch, actions }) {
     const handleScaleChange = (e) => {
       const selectedIndex = parseInt(e.target.value);
       if (isNaN(selectedIndex) || selectedIndex < 0) return;
@@ -118,7 +121,7 @@
         <label class="block text-xs font-medium text-gray-700 dark:text-gray-300">
           Equivalent Scales (${detectedScales.length})
           <select
-            class="mt-1 block w-full rounded-md border-gray-300 shadow-sm text-sm"
+            class="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-800 shadow-sm text-sm"
             onChange=${handleScaleChange}
             aria-label="Select equivalent scale"
           >
@@ -183,7 +186,7 @@
           Root
         </label>
         <select
-          class="block w-full rounded-md border-gray-300 shadow-sm text-lg font-bold"
+          class="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-800 shadow-sm text-lg font-bold"
           value=${state.rootNote}
           onChange=${handleTransposeChange}
           aria-label="Transpose scale to root"
@@ -200,38 +203,7 @@
   }
 
   function MoveRootSelector({ state, dispatch, actions }) {
-    // Calculate available notes and their resulting scales
-    const noteOptions = React.useMemo(() => {
-      const blueIntervals = state.blueIntervals || [];
-      const currentRootIndex = window.SlimSolo.MusicTheory.getNoteIndex(state.rootNote);
-
-      // Get all notes currently on canvas
-      const noteSet = new Set();
-      blueIntervals.forEach(interval => {
-        const noteName = window.SlimSolo.MusicTheory.getNoteName((currentRootIndex + interval) % 12);
-        noteSet.add(noteName);
-      });
-
-      // For each note, calculate what scale would result if it became root
-      const options = [];
-      window.SlimSolo.MusicTheory.NOTES.filter(note => noteSet.has(note)).forEach(note => {
-        const newRootIndex = window.SlimSolo.MusicTheory.getNoteIndex(note);
-
-        // Recalculate intervals from the new root's perspective
-        const newIntervals = blueIntervals.map(interval => {
-          const absoluteNote = (currentRootIndex + interval) % 12;
-          return (absoluteNote - newRootIndex + 12) % 12;
-        }).sort((a, b) => a - b);
-
-        // Detect what scale this would be
-        const detectedScale = window.SlimSolo.MusicTheory.detectScaleFromIntervals(newIntervals);
-        const scaleName = detectedScale ? formatScaleName(detectedScale) : 'Undefined';
-
-        options.push({ note, scaleName });
-      });
-
-      return options;
-    }, [state.blueIntervals, state.rootNote]);
+    const notes = window.SlimSolo.MusicTheory.NOTES;
 
     const handleMoveChange = (e) => {
       dispatch({ type: actions.SET_ROOT, payload: e.target.value });
@@ -242,15 +214,15 @@
         <label class="block text-xs font-medium text-gray-700 dark:text-gray-300">
           ↻ Move Root
           <select
-            class="mt-1 block w-full rounded-md border-gray-300 shadow-sm text-sm"
-              value=${state.rootNote}
+            class="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-800 shadow-sm text-sm"
+            value=${state.rootNote}
             onChange=${handleMoveChange}
             aria-label="Move root (reinterpret notes)"
             title="Select root to reinterpret notes"
           >
-            ${noteOptions.map(({ note, scaleName }) => html`
+            ${notes.map(note => html`
               <option key=${note} value=${note}>
-                ${note} → ${scaleName}
+                ${note}
               </option>
             `)}
           </select>
@@ -262,7 +234,7 @@
   function FretCountSlider({ state, dispatch, actions }) {
     const handleFretChange = (e) => {
       const value = parseInt(e.target.value);
-      if (!isNaN(value) && value >= 0 && value <= 24) {
+      if (!isNaN(value) && value >= 12 && value <= 24) {
         dispatch({ type: actions.SET_FRET_COUNT, payload: value });
       }
     };
@@ -274,13 +246,13 @@
         </label>
         <input
           type="number"
-          min="0"
+          min="12"
           max="24"
           value=${state.fretCount}
           onChange=${handleFretChange}
-          class="flex-1 px-2 py-1 rounded-md border-gray-300 shadow-sm text-sm"
+          class="flex-1 px-2 py-1 rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-800 shadow-sm text-sm"
           aria-label="Adjust fret count"
-          aria-valuemin="0"
+          aria-valuemin="12"
           aria-valuemax="24"
           aria-valuenow=${state.fretCount}
         />
@@ -290,33 +262,37 @@
 
   function DisplayOptions({ state, dispatch, actions }) {
     const displayModes = [
-      { value: 'semitones', label: 'Semitones' },
-      { value: 'intervals', label: 'Intervals' },
+      { value: 'none', label: 'None' },
       { value: 'notes', label: 'Notes' },
-      { value: 'none', label: 'None' }
+      { value: 'intervals', label: 'Intervals' },
+      { value: 'semitones', label: 'Semitones' },
+      { value: 'semitonesString', label: 'Semitones-String' }
     ];
 
-    const handleDisplayModeChange = (e) => {
-      dispatch({ type: actions.SET_DISPLAY_MODE, payload: e.target.value });
+    const handleDisplayModeChange = (mode) => {
+      dispatch({ type: actions.SET_DISPLAY_MODE, payload: mode });
     };
 
     return html`
-      <div class="space-y-1">
-        <label class="block text-xs font-medium text-gray-700 dark:text-gray-300">
-          Note Display
-          <select
-            class="mt-1 block w-full rounded-md border-gray-300 shadow-sm text-sm"
-            value=${state.displayMode}
-            onChange=${handleDisplayModeChange}
-            aria-label="Select note display mode"
-          >
-            ${displayModes.map(mode => html`
-              <option key=${mode.value} value=${mode.value}>
-                ${mode.label}
-              </option>
-            `)}
-          </select>
+      <div class="space-y-2">
+        <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+          Display
         </label>
+        <div class="space-y-1">
+          ${displayModes.map(mode => html`
+            <label key=${mode.value} class="flex items-center space-x-1">
+              <input
+                type="radio"
+                name="displayMode"
+                value=${mode.value}
+                checked=${state.displayMode === mode.value}
+                onChange=${() => handleDisplayModeChange(mode.value)}
+                class="border-gray-300 dark:border-gray-600 h-3 w-3"
+              />
+              <span class="text-xs text-gray-700 dark:text-gray-300">${mode.label}</span>
+            </label>
+          `)}
+        </div>
       </div>
     `;
   }
@@ -427,8 +403,8 @@
               <select
                 value=${state.customScaleRoot}
                 onChange=${handleRootChange}
-                class="block w-full rounded-md border-gray-300 shadow-sm text-xs"
-                    >
+                class="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-800 shadow-sm text-xs"
+              >
                 ${window.SlimSolo.MusicTheory.NOTES.map(note => html`
                   <option value=${note}>${note}</option>
                 `)}
@@ -485,14 +461,9 @@
     `;
   }
 
-  function ControlPanel({ state, dispatch, actions, isMobile = false, onClose }) {
-    // Mobile: compact spacing, extra padding for hamburger button
-    const containerClass = isMobile
-      ? 'w-full h-full p-2 pt-14 space-y-2 overflow-y-auto bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-700'
-      : 'w-full h-full p-3 space-y-3 overflow-y-auto bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-700';
-
+  function ControlPanel({ state, dispatch, actions }) {
     return html`
-      <div class="${containerClass}">
+      <div class="w-full h-full p-3 space-y-3 overflow-y-auto bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-700">
         <div class="flex gap-2">
           <div class="w-10 flex-shrink-0">
             <${RootNoteSelector} state=${state} dispatch=${dispatch} actions=${actions} />
@@ -505,7 +476,7 @@
         <${ScaleInfo} state=${state} />
 
         ${state.detectedScales && state.detectedScales.length > 0
-          ? html`<${EquivalentScalesDropdown} detectedScales=${state.detectedScales} dispatch=${dispatch} actions=${actions} theme=${state.theme} />`
+          ? html`<${EquivalentScalesDropdown} detectedScales=${state.detectedScales} dispatch=${dispatch} actions=${actions} />`
           : null}
 
         <${DisplayOptions} state=${state} dispatch=${dispatch} actions=${actions} />

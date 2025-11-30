@@ -68,13 +68,7 @@
       skipEmpty = true
     } = options;
 
-    // Normalize line endings and strip BOM
-    const normalizedText = csvText
-      .replace(/^\uFEFF/, '')      // Remove UTF-8 BOM if present
-      .replace(/\r\n/g, '\n')       // Windows CRLF → LF
-      .replace(/\r/g, '\n');        // Old Mac CR → LF
-
-    const lines = normalizedText.trim().split('\n');
+    const lines = csvText.trim().split('\n');
     if (lines.length === 0) return { headers: [], rows: [] };
 
     // Parse header row

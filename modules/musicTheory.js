@@ -220,28 +220,45 @@
   // findEquivalentScales() has been replaced by CSV-based lookup
   // See modules/equivalentScalesData.js and data/equivalent_scales.csv
 
-  // Format scale names for display (18 essential scales)
   function formatScaleName(scale) {
     const names = {
-      // 18 Essential Scales (alphabetical)
-      blues: 'Blues (Minor)',
-      bluesMajor: 'Blues (Major)',
-      dorian: 'Dorian',
-      harmonicMajor: 'Harmonic Major',
-      harmonicMinor: 'Harmonic Minor',
-      hungarianMinor: 'Hungarian Minor',
-      inSen: 'In-sen (Japanese)',
-      locrian: 'Locrian',
-      lydian: 'Lydian',
       major: 'Major',
-      majorPentatonic: 'Major Pentatonic',
-      melodicMinor: 'Melodic Minor',
       minor: 'Minor',
+      harmonicMinor: 'Harmonic Minor',
+      melodicMinor: 'Melodic Minor',
+      majorPentatonic: 'Major Pentatonic',
       minorPentatonic: 'Minor Pentatonic',
-      mixolydian: 'Mixolydian',
+      blues: 'Blues',
+      majorBlues: 'Major Blues',
+      chromatic: 'Chromatic',
+      wholeTone: 'Whole Tone',
+      diminishedWH: 'Diminished (W-H)',
+      diminishedHW: 'Diminished (H-W)',
+      augmented: 'Augmented',
+      bebopDominant: 'Bebop Dominant',
+      bebopMajor: 'Bebop Major',
+      bebopMinor: 'Bebop Minor',
+      bebopDorian: 'Bebop Dorian',
+      hungarianMinor: 'Hungarian Minor',
+      hungarianMajor: 'Hungarian Major',
       persian: 'Persian',
-      phrygian: 'Phrygian',
-      phrygianDominant: 'Phrygian Dominant (Maqam Hijaz)'
+      arabian: 'Arabian',
+      byzantine: 'Byzantine',
+      jewish: 'Jewish',
+      spanish8Tone: 'Spanish 8-Tone',
+      neapolitanMajor: 'Neapolitan Major',
+      neapolitanMinor: 'Neapolitan Minor',
+      romanian: 'Romanian',
+      doubleHarmonicMajor: 'Double Harmonic Major',
+      doubleHarmonicMinor: 'Double Harmonic Minor',
+      prometheus: 'Prometheus',
+      tritone: 'Tritone',
+      egyptian: 'Egyptian',
+      hirajoshi: 'Hirajoshi',
+      iwato: 'Iwato',
+      inSen: 'In-Sen',
+      blues9Note: 'Blues (9-Note)',
+      lydianChromatic: 'Lydian Chromatic'
     };
     return names[scale] || scale;
   }
@@ -1002,11 +1019,128 @@
     }).slice(0, 20);
   }
 
-  // findContainingScales removed - unused dead code
+  function findContainingScales(currentIntervals, rootNote) {
+    if (!currentIntervals || currentIntervals.length === 0) return [];
+
+    const currentSet = new Set(currentIntervals);
+    const results = [];
+
+    for (const rootCandidate of NOTES) {
+      const rootIndex = getNoteIndex(rootCandidate);
+
+      for (const [scaleName, scaleFormula] of Object.entries(SCALES)) {
+        const scaleSet = new Set(scaleFormula);
+
+        const extraNotes = [];
+        for (const interval of currentIntervals) {
+          if (!scaleSet.has(interval)) {
+            const noteIndex = (rootIndex + interval) % 12;
+            extraNotes.push(NOTES[noteIndex]);
+          }
+        }
+
+        if (extraNotes.length > 0 && extraNotes.length <= 3) {
+          const missingInScale = [];
+          for (const scaleInterval of scaleFormula) {
+            if (!currentSet.has(scaleInterval)) {
+              missingInScale.push(scaleInterval);
+            }
+          }
+
+          if (missingInScale.length > 0) {
+            results.push({
+              root: rootCandidate,
+              scale: scaleName,
+              mode: scaleName,
+              label: `${rootCandidate} ${formatScaleName(scaleName)}`,
+              extraNotes: extraNotes,
+              missingNotes: missingInScale.length,
+              popularity: SCALE_POPULARITY[scaleName] || 0
+            });
+          }
+        }
+      }
+
+      for (const [modeName, modeFormula] of Object.entries(MODE_FORMULAS)) {
+        if (SCALES[modeName]) continue;
+
+        const modeSet = new Set(modeFormula);
+
+        const extraNotes = [];
+        for (const interval of currentIntervals) {
+          if (!modeSet.has(interval)) {
+            const noteIndex = (rootIndex + interval) % 12;
+            extraNotes.push(NOTES[noteIndex]);
+          }
+        }
+
+        if (extraNotes.length > 0 && extraNotes.length <= 3) {
+          const missingInMode = [];
+          for (const modeInterval of modeFormula) {
+            if (!currentSet.has(modeInterval)) {
+              missingInMode.push(modeInterval);
+            }
+          }
+
+          if (missingInMode.length > 0) {
+            results.push({
+              root: rootCandidate,
+              scale: modeName,
+              mode: modeName,
+              label: `${rootCandidate} ${formatModeName(modeName)}`,
+              extraNotes: extraNotes,
+              missingNotes: missingInMode.length,
+              popularity: SCALE_POPULARITY[modeName] || 0
+            });
+          }
+        }
+      }
+    }
+
+    return results.sort((a, b) => {
+      if (a.extraNotes.length !== b.extraNotes.length) {
+        return a.extraNotes.length - b.extraNotes.length;
+      }
+      if (b.popularity !== a.popularity) return b.popularity - a.popularity;
+      return a.label.localeCompare(b.label);
+    }).slice(0, 20);
+  }
+
+  function formatScaleName(scale) {
+    const names = {
+      blues: 'Blues (Minor)',
+      bluesMajor: 'Blues (Major)',
+      dorian: 'Dorian',
+      harmonicMajor: 'Harmonic Major',
+      harmonicMinor: 'Harmonic Minor',
+      hungarianMinor: 'Hungarian Minor',
+      inSen: 'In-sen (Japanese)',
+      locrian: 'Locrian',
+      lydian: 'Lydian',
+      major: 'Major',
+      majorPentatonic: 'Major Pentatonic',
+      melodicMinor: 'Melodic Minor',
+      minor: 'Minor',
+      minorPentatonic: 'Minor Pentatonic',
+      mixolydian: 'Mixolydian',
+      persian: 'Persian',
+      phrygian: 'Phrygian',
+      phrygianDominant: 'Phrygian Dominant (Maqam Hijaz)'
+    };
+    return names[scale] || scale;
+  }
+
+  function formatModeName(mode) {
+    const names = {
+      ionian: 'Ionian', dorian: 'Dorian', phrygian: 'Phrygian',
+      lydian: 'Lydian', mixolydian: 'Mixolydian', aeolian: 'Aeolian',
+      locrian: 'Locrian', altered: 'Altered', lydianDominant: 'Lydian Dominant'
+    };
+    return names[mode] || mode;
+  }
 
   window.SlimSolo = window.SlimSolo || {};
   window.SlimSolo.MusicTheory = {
-    // Core data
     NOTES,
     ENHARMONICS,
     SCALES,
@@ -1014,7 +1148,6 @@
     MODES,
     MODE_FORMULAS,
     SCALE_POPULARITY,
-    // Core functions
     getNoteIndex,
     getNoteName,
     getScaleNotes,
@@ -1024,16 +1157,19 @@
     transposeNote,
     getScaleInfo,
     getModeInfo,
+    detectScaleFromIntervals,
+    detectAllScalesFromNotes,
+    // findEquivalentScales removed - use EquivalentScalesData.getEquivalentScales()
+    findContainingScales,
     compareNoteArrays,
     getSemitonesBetweenNotes,
-    // Detection functions
-    detectScaleFromIntervals,
+    getIntervalFromClick,
+    findExactMatches,
+    findContainedScales,
     findMainListMatches,
-    // Formatting
+    findExtendedListMatches,
+    getScalePopularity,
     formatScaleName,
-    formatModeName,
-    getScalePopularity
-    // Removed unused: findContainingScales, findExactMatches, findContainedScales,
-    // findExtendedListMatches, detectAllScalesFromNotes, getIntervalFromClick
+    formatModeName
   };
 })();

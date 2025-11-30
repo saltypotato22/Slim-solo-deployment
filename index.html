@@ -2,16 +2,11 @@
 <html lang="en" class="light">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Bass Fretboard Visualizer</title>
 
   <!-- TailwindCSS via CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
-  <script>
-    tailwind.config = {
-      darkMode: 'class'
-    }
-  </script>
 
   <!-- React 18 via CDN -->
   <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
@@ -34,7 +29,6 @@
       --bg-secondary: #1f2937;
       --text-primary: #f9fafb;
       --accent: #60a5fa;
-      color-scheme: dark;
     }
 
     body {
@@ -68,170 +62,19 @@
     input[type="number"]::-moz-number-spin-box {
       display: block;
     }
-
-    /* Dark mode form controls */
-    html.dark select,
-    html.dark input[type="number"] {
-      color: #f9fafb !important;
-      background-color: #374151 !important;
-      border-color: #4b5563 !important;
-    }
-
-    html.dark select option {
-      background-color: #374151;
-      color: #f9fafb;
-    }
-
-    /* ========================================
-       MOBILE RESPONSIVE - Landscape Phone
-       Samsung S24: ~780x360 logical pixels
-       ======================================== */
-
-    /* Portrait orientation overlay */
-    #portrait-overlay {
-      display: none;
-      position: fixed;
-      top: 0;
-      left: 0;
-      right: 0;
-      bottom: 0;
-      background: #111827;
-      color: white;
-      z-index: 9999;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      text-align: center;
-      padding: 2rem;
-    }
-
-    #portrait-overlay svg {
-      width: 80px;
-      height: 80px;
-      margin-bottom: 1rem;
-      animation: rotate-hint 2s ease-in-out infinite;
-    }
-
-    @keyframes rotate-hint {
-      0%, 100% { transform: rotate(0deg); }
-      50% { transform: rotate(90deg); }
-    }
-
-    /* Show overlay in portrait mode on touch devices */
-    @media (orientation: portrait) and (max-width: 900px) {
-      #portrait-overlay {
-        display: flex;
-      }
-      #app {
-        display: none;
-      }
-    }
-
-    /* Mobile breakpoint: landscape phones (height < 500px) */
-    @media (max-height: 500px) {
-      /* Prevent zoom on canvas */
-      #canvas-container {
-        touch-action: manipulation;
-      }
-
-      canvas {
-        touch-action: manipulation;
-      }
-
-      /* Tighter spacing for mobile sidebar */
-      .mobile-compact {
-        padding: 0.5rem !important;
-      }
-
-      .mobile-compact > * + * {
-        margin-top: 0.25rem !important;
-      }
-
-      /* Smaller text on mobile */
-      .mobile-text-xs {
-        font-size: 0.75rem !important;
-      }
-    }
-
-    /* Sidebar overlay mode for mobile */
-    .sidebar-overlay {
-      position: fixed;
-      top: 0;
-      left: 0;
-      height: 100%;
-      z-index: 100;
-      transform: translateX(-100%);
-      transition: transform 0.3s ease;
-    }
-
-    .sidebar-overlay.open {
-      transform: translateX(0);
-    }
-
-    .sidebar-backdrop {
-      display: none;
-      position: fixed;
-      top: 0;
-      left: 0;
-      right: 0;
-      bottom: 0;
-      background: rgba(0, 0, 0, 0.5);
-      z-index: 99;
-    }
-
-    .sidebar-backdrop.open {
-      display: block;
-    }
-
-    /* Toggle button for collapsed sidebar */
-    .sidebar-toggle {
-      position: fixed;
-      top: 0.5rem;
-      left: 0.5rem;
-      z-index: 101;
-      width: 44px;
-      height: 44px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      background: var(--bg-primary);
-      border: 1px solid #d1d5db;
-      border-radius: 0.375rem;
-      cursor: pointer;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-    }
-
-    html.dark .sidebar-toggle {
-      border-color: #4b5563;
-    }
-
-    /* Sidebar push transition for mobile */
-    .sidebar-push {
-      transition: width 0.3s ease;
-    }
-
   </style>
 </head>
 <body class="h-screen overflow-hidden">
-  <!-- Portrait orientation message -->
-  <div id="portrait-overlay">
-    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 18h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
-    </svg>
-    <h2 style="font-size: 1.5rem; font-weight: bold; margin-bottom: 0.5rem;">Rotate Your Device</h2>
-    <p style="opacity: 0.8;">This app works best in landscape mode</p>
-  </div>
-
   <div id="app" class="h-full"></div>
 
   <!-- Module loading order is critical -->
-  <script src="modules/musicTheory.js?v=3"></script>
-  <script src="modules/csvParser.js?v=3"></script>
-  <script src="modules/equivalentScalesData.js?v=3"></script>
-  <script src="modules/instruments.js?v=3"></script>
-  <script src="modules/fretboardCanvas.js?v=3"></script>
-  <script src="modules/controlPanel.js?v=3"></script>
-  <script src="modules/exportManager.js?v=3"></script>
-  <script src="app.js?v=4"></script>
+  <script src="modules/musicTheory.js"></script>
+  <script src="modules/csvParser.js"></script>
+  <script src="modules/equivalentScalesData.js"></script>
+  <script src="modules/instruments.js"></script>
+  <script src="modules/fretboardCanvas.js"></script>
+  <script src="modules/controlPanel.js"></script>
+  <script src="modules/exportManager.js"></script>
+  <script src="app.js"></script>
 </body>
 </html>

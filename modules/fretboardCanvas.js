@@ -6,26 +6,15 @@
   let currentTheme = 'light';
   let currentRenderState = null;
 
-  // Visual constants - desktop defaults
+  // Visual constants
   const NOTE_RADIUS = {
     STANDARD: 16,
     FIFTH: 18,
     ROOT: 20
   };
 
-  // Mobile-specific larger note radii for touch
-  const NOTE_RADIUS_MOBILE = {
-    STANDARD: 20,
-    FIFTH: 22,
-    ROOT: 24
-  };
-
   const OPEN_STRING_X_OFFSET = -20;
   const OPEN_STRING_LABEL_X_OFFSET = -35;
-
-  // Click detection radius (larger on mobile for touch)
-  const CLICK_RADIUS = 25;
-  const CLICK_RADIUS_MOBILE = 40;
 
   const themes = {
     light: {
@@ -51,25 +40,12 @@
   };
 
   function init(canvasElement) {
-    // Clean up any existing listeners first
-    if (canvas) {
-      dispose();
-    }
-
     canvas = canvasElement;
     ctx = canvas.getContext('2d');
     setupCanvas();
 
     canvas.addEventListener('click', handleCanvasClick);
     canvas.addEventListener('mousemove', handleCanvasHover);
-  }
-
-  function dispose() {
-    if (canvas) {
-      canvas.removeEventListener('click', handleCanvasClick);
-      canvas.removeEventListener('mousemove', handleCanvasHover);
-    }
-    currentRenderState = null;
   }
 
   function setupCanvas() {
@@ -91,28 +67,16 @@
     const displayWidth = canvas.width / (window.devicePixelRatio || 1);
     const displayHeight = canvas.height / (window.devicePixelRatio || 1);
 
-    // Mobile detection: landscape phone (height < 500px)
-    const isMobile = window.innerHeight < 500;
-
-    // Responsive padding: smaller on mobile
-    const padding = isMobile
-      ? { top: 25, right: 25, bottom: 25, left: 35 }
-      : { top: 60, right: 60, bottom: 60, left: 80 };
-
-    const horizontalPadding = padding.left + padding.right;
-    const verticalPadding = padding.top + padding.bottom;
-
     layout = {
-      padding,
+      padding: { top: 60, right: 60, bottom: 60, left: 80 },
       width: displayWidth,
       height: displayHeight,
-      fretboardWidth: displayWidth - horizontalPadding,
-      fretboardHeight: displayHeight - verticalPadding,
-      nutWidth: isMobile ? 4 : 8,
+      fretboardWidth: displayWidth - 140,
+      fretboardHeight: displayHeight - 120,
+      nutWidth: 8,
       stringSpacing: 0,
       fretPositions: [],
-      fretCount: 21,
-      isMobile
+      fretCount: 21
     };
   }
 
@@ -131,8 +95,7 @@
   function findNoteAtPosition(x, y) {
     if (!currentRenderState || !currentRenderState.notePositions) return null;
 
-    // Use larger click radius on mobile for touch
-    const clickRadius = layout.isMobile ? CLICK_RADIUS_MOBILE : CLICK_RADIUS;
+    const clickRadius = 25;
 
     for (const note of currentRenderState.notePositions) {
       const noteX = getNoteX(note.fret);
@@ -156,8 +119,7 @@
 
     if (!currentRenderState || !window.SlimSolo.onNoteClick) return;
 
-    // Use larger click radius on mobile for touch
-    const clickRadius = layout.isMobile ? CLICK_RADIUS_MOBILE : CLICK_RADIUS;
+    const clickRadius = 25;
     const stringCount = currentRenderState.stringCount || 6;
 
     // Check all fret positions (chromatic)
@@ -322,9 +284,6 @@
     const stringCount = state.stringCount || 6;
     const fretStates = state.fretStates || new Map();
 
-    // Use larger note radii on mobile for touch
-    const radii = layout.isMobile ? NOTE_RADIUS_MOBILE : NOTE_RADIUS;
-
     for (let stringIndex = 0; stringIndex < stringCount; stringIndex++) {
       for (let fret = 0; fret <= state.fretCount; fret++) {
         const key = `${stringIndex}-${fret}`;
@@ -335,11 +294,11 @@
         const pos = { string: stringIndex, fret };
 
         if (isRoot) {
-          drawSolidNote(pos, colors.root, radii.ROOT, stringCount);
+          drawSolidNote(pos, colors.root, NOTE_RADIUS.ROOT, stringCount);
         } else if (fretState === 'blue-circle') {
-          drawRingNote(pos, colors.blueCircle, radii.STANDARD, stringCount, colors.fretboard);
+          drawRingNote(pos, colors.blueCircle, NOTE_RADIUS.STANDARD, stringCount, colors.fretboard);
         } else if (fretState === 'blue-solid') {
-          drawSolidNote(pos, colors.blueSolid, radii.STANDARD, stringCount);
+          drawSolidNote(pos, colors.blueSolid, NOTE_RADIUS.STANDARD, stringCount);
         }
       }
     }
@@ -425,7 +384,6 @@
     init,
     render,
     resize,
-    dispose,
     themes
   };
 })();
