@@ -310,6 +310,53 @@
     `;
   }
 
+  // Sound mode selector for sidebar
+  function SoundModeSelector({ state, dispatch, actions }) {
+    const soundModes = [
+      { value: 'none', label: 'None' },
+      { value: 'softBell', label: 'Soft Bell' },
+      { value: 'marimba', label: 'Marimba' },
+      { value: 'vibes', label: 'Vibes' },
+      { value: 'glass', label: 'Glass' },
+      { value: 'pluck', label: 'Pluck' },
+      { value: 'chime', label: 'Chime' },
+      { value: 'kalimba', label: 'Kalimba' },
+      { value: 'glockenspiel', label: 'Glockenspiel' },
+      { value: 'harp', label: 'Harp' },
+      { value: 'flute', label: 'Flute' },
+      { value: 'pad', label: 'Pad' },
+      { value: 'celesta', label: 'Celesta' },
+      { value: 'musicBox', label: 'Music Box' },
+      { value: 'steelDrum', label: 'Steel Drum' },
+      { value: 'bowls', label: 'Bowls' },
+      { value: 'woodblock', label: 'Woodblock' }
+    ];
+
+    const handleSoundModeChange = (e) => {
+      dispatch({ type: actions.SET_SOUND_MODE, payload: e.target.value });
+    };
+
+    return html`
+      <div class="space-y-1">
+        <label class="block text-xs font-medium text-gray-700 dark:text-gray-300">
+          Sound
+          <select
+            class="mt-1 block w-full rounded-md border-gray-300 shadow-sm text-sm"
+            value=${state.soundMode}
+            onChange=${handleSoundModeChange}
+            aria-label="Select sound feedback mode"
+          >
+            ${soundModes.map(mode => html`
+              <option key=${mode.value} value=${mode.value}>
+                ${mode.label}
+              </option>
+            `)}
+          </select>
+        </label>
+      </div>
+    `;
+  }
+
   function ThemeToggle({ state, dispatch, actions }) {
     const handleThemeToggle = () => {
       const newTheme = state.theme === 'light' ? 'dark' : 'light';
@@ -684,6 +731,46 @@
     `;
   }
 
+  // Compact sound mode selector for top bar
+  function SoundModeSelectorCompact({ state, dispatch, actions }) {
+    const soundModes = [
+      { value: 'none', label: 'None' },
+      { value: 'softBell', label: 'Bell' },
+      { value: 'marimba', label: 'Marimba' },
+      { value: 'vibes', label: 'Vibes' },
+      { value: 'glass', label: 'Glass' },
+      { value: 'pluck', label: 'Pluck' },
+      { value: 'chime', label: 'Chime' },
+      { value: 'kalimba', label: 'Kalimba' },
+      { value: 'glockenspiel', label: 'Glock' },
+      { value: 'harp', label: 'Harp' },
+      { value: 'flute', label: 'Flute' },
+      { value: 'pad', label: 'Pad' },
+      { value: 'celesta', label: 'Celesta' },
+      { value: 'musicBox', label: 'MusicBox' },
+      { value: 'steelDrum', label: 'Steel' },
+      { value: 'bowls', label: 'Bowls' },
+      { value: 'woodblock', label: 'Wood' }
+    ];
+
+    const handleSoundModeChange = (e) => {
+      dispatch({ type: actions.SET_SOUND_MODE, payload: e.target.value });
+    };
+
+    return html`
+      <select
+        class="topbar-select rounded border-gray-300 shadow-sm text-xs px-1 py-0.5"
+        value=${state.soundMode}
+        onChange=${handleSoundModeChange}
+        aria-label="Sound mode"
+      >
+        ${soundModes.map(mode => html`
+          <option key=${mode.value} value=${mode.value}>${mode.label}</option>
+        `)}
+      </select>
+    `;
+  }
+
   // Compact theme toggle for top bar (stacked)
   function ThemeToggleCompact({ state, dispatch, actions }) {
     const handleThemeToggle = () => {
@@ -719,6 +806,46 @@
         aria-label="Export PNG"
       >
         📥 PNG
+      </button>
+    `;
+  }
+
+  // Erase all button - clears all notes except root (sidebar version with icon)
+  function EraseButton({ dispatch, actions }) {
+    const handleErase = () => {
+      dispatch({ type: actions.ERASE_ALL });
+    };
+
+    return html`
+      <button
+        onClick=${handleErase}
+        class="w-full px-2 py-0.5 rounded text-xs font-medium bg-red-500 text-white hover:bg-red-600 transition-colors whitespace-nowrap flex items-center justify-center"
+        aria-label="Erase all notes"
+        title="Clear all notes (keep root only)"
+      >
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+        </svg>
+      </button>
+    `;
+  }
+
+  // Compact erase button for top bar (icon only)
+  function EraseButtonCompact({ dispatch, actions }) {
+    const handleErase = () => {
+      dispatch({ type: actions.ERASE_ALL });
+    };
+
+    return html`
+      <button
+        onClick=${handleErase}
+        class="p-1 rounded bg-red-500 text-white hover:bg-red-600 transition-colors"
+        aria-label="Erase all notes"
+        title="Clear all notes (keep root only)"
+      >
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+        </svg>
       </button>
     `;
   }
@@ -798,11 +925,22 @@
             <${FretCountCompact} state=${state} dispatch=${dispatch} actions=${actions} />
           </div>
 
+          <div class="topbar-divider h-8 w-px bg-gray-300 dark:bg-gray-600 self-center" />
+
+          <!-- Sound -->
+          <div class="flex flex-col self-center">
+            <span class="text-xs font-medium text-gray-700 dark:text-gray-300">Sound</span>
+            <${SoundModeSelectorCompact} state=${state} dispatch=${dispatch} actions=${actions} />
+          </div>
+
           <!-- Stacked Dark/Export buttons -->
           <div class="flex flex-col gap-1 self-center">
             <${ThemeToggleCompact} state=${state} dispatch=${dispatch} actions=${actions} />
             <${ExportButtonCompact} state=${state} />
           </div>
+
+          <!-- Erase button (trash icon) -->
+          <${EraseButtonCompact} dispatch=${dispatch} actions=${actions} />
         </div>
       </div>
     `;
@@ -830,6 +968,7 @@
           : null}
 
         <${DisplayOptions} state=${state} dispatch=${dispatch} actions=${actions} />
+        <${SoundModeSelector} state=${state} dispatch=${dispatch} actions=${actions} />
 
         <${MoveRootSelector} state=${state} dispatch=${dispatch} actions=${actions} />
         <${FretCountSlider} state=${state} dispatch=${dispatch} actions=${actions} />
@@ -837,6 +976,7 @@
         <div class="flex flex-col gap-1">
           <${ThemeToggleCompact} state=${state} dispatch=${dispatch} actions=${actions} />
           <${ExportButtonCompact} state=${state} />
+          <${EraseButton} dispatch=${dispatch} actions=${actions} />
         </div>
       </div>
     `;

@@ -194,10 +194,7 @@
         const distance = Math.sqrt((x - noteX) ** 2 + (y - noteY) ** 2);
 
         if (distance <= clickRadius) {
-          // Check if it's a root note (don't allow clicking roots)
-          const scalePos = currentRenderState.notePositions?.find(p => p.string === stringIndex && p.fret === fret);
-          if (scalePos && scalePos.isRoot) return;
-
+          // Let all clicks through - app.js handles root notes (plays sound only)
           window.SlimSolo.onNoteClick(stringIndex, fret);
           return;
         }
@@ -339,7 +336,7 @@
     ctx.fill();
   }
 
-  function drawRingNote(pos, color, radius, stringCount, backgroundColor) {
+  function drawRingNote(pos, color, radius, stringCount, backgroundColor, lineWidth = 2) {
     const x = getNoteX(pos.fret);
     const y = getNoteY(pos.string, stringCount);
 
@@ -349,7 +346,7 @@
     ctx.fill();
 
     ctx.strokeStyle = color;
-    ctx.lineWidth = 2;
+    ctx.lineWidth = lineWidth;
     ctx.beginPath();
     ctx.arc(x, y, radius, 0, Math.PI * 2);
     ctx.stroke();
@@ -379,9 +376,9 @@
         const pos = { string: stringIndex, fret };
 
         if (isRoot) {
-          // Root: green circle when undefined, green solid when scale detected
+          // Root: thick green circle when undefined, green solid when scale detected
           if (isScaleUndefined) {
-            drawRingNote(pos, colors.rootColor, radii.ROOT, stringCount, colors.fretboard);
+            drawRingNote(pos, colors.rootColor, radii.ROOT, stringCount, colors.fretboard, 5);
           } else {
             drawSolidNote(pos, colors.rootColor, radii.ROOT, stringCount);
           }

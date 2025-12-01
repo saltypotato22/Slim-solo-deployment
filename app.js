@@ -13,6 +13,7 @@
           window.SlimSolo.FretboardCanvas &&
           window.SlimSolo.ControlPanel &&
           window.SlimSolo.ExportManager &&
+          window.SlimSolo.AudioPlayer &&
           window.SlimSolo.CSVParser &&
           window.SlimSolo.EquivalentScalesData) {
         callback();
@@ -79,7 +80,8 @@
       panelCollapsed: false,
       fretStates: new Map(),
       isManuallyEdited: false,
-      detectedScale: null
+      detectedScale: null,
+      soundMode: 'none'  // 'none' | 'softBell' | 'marimba' | 'vibes' | 'glass' | 'pluck' | 'chime'
     };
 
     const actions = {
@@ -96,7 +98,9 @@
       TOGGLE_PANEL: 'TOGGLE_PANEL',
       CYCLE_FRET: 'CYCLE_FRET',
       LOAD_SCALE_FROM_LIST: 'LOAD_SCALE_FROM_LIST',
-      SET_FROM_EQUIVALENT: 'SET_FROM_EQUIVALENT'
+      SET_FROM_EQUIVALENT: 'SET_FROM_EQUIVALENT',
+      ERASE_ALL: 'ERASE_ALL',
+      SET_SOUND_MODE: 'SET_SOUND_MODE'
     };
 
     function populateFretStatesForScale(tuning, rootNote, scale, mode, fretCount) {
@@ -209,9 +213,21 @@
           const newFretCount = action.payload;
           const oldFretCount = state.fretCount;
 
-          // If decreasing frets, just update the count (notes beyond won't render)
-          if (newFretCount <= oldFretCount) {
-            return { ...state, fretCount: newFretCount };
+          // If decreasing frets, clean up ghost notes beyond new fret count
+          if (newFretCount < oldFretCount) {
+            const cleanedFretStates = new Map();
+            state.fretStates.forEach((value, key) => {
+              const [string, fret] = key.split('-').map(Number);
+              if (fret <= newFretCount) {
+                cleanedFretStates.set(key, value);
+              }
+            });
+            return { ...state, fretCount: newFretCount, fretStates: cleanedFretStates };
+          }
+
+          // If same fret count, no change needed
+          if (newFretCount === oldFretCount) {
+            return state;
           }
 
           // Increasing frets - need to populate new positions
@@ -426,6 +442,16 @@
             isManuallyEdited: true
           };
         }
+        case actions.ERASE_ALL: {
+          // Clear all notes except the root (root is never in fretStates anyway)
+          return {
+            ...state,
+            fretStates: new Map(),
+            isManuallyEdited: true
+          };
+        }
+        case actions.SET_SOUND_MODE:
+          return { ...state, soundMode: action.payload };
         default:
           return state;
       }
@@ -509,6 +535,20 @@
       useEffect(() => {
         localStorage.setItem('menuLayout', state.menuLayout);
       }, [state.menuLayout]);
+
+      // Sound mode - load from localStorage on startup
+      useEffect(() => {
+        const savedSound = localStorage.getItem('slimSolo.soundMode');
+        if (savedSound && ['none', 'softBell', 'marimba', 'vibes', 'glass', 'pluck', 'chime'].includes(savedSound)) {
+          dispatch({ type: actions.SET_SOUND_MODE, payload: savedSound });
+        }
+      }, []);
+
+      // Sound mode - sync with AudioPlayer and persist
+      useEffect(() => {
+        window.SlimSolo.AudioPlayer.setSoundMode(state.soundMode);
+        localStorage.setItem('slimSolo.soundMode', state.soundMode);
+      }, [state.soundMode]);
 
       // Calculate scale notes and positions with useMemo
       const { scaleNotes, notePositions } = useMemo(() => {
@@ -730,8 +770,20 @@
           if (!note) return; // Null check for safety
           const noteName = note.replace(/\d+/, '');
 
-          // Don't allow clicking root notes
-          if (noteName === currentState.rootNote) return;
+          // Root notes: play sound but don't change state
+          if (noteName === currentState.rootNote) {
+            if (currentState.soundMode !== 'none') {
+              const octave = parseInt(note.match(/\d+/)?.[0]) || 3;
+              window.SlimSolo.AudioPlayer.playNote(noteName, octave);
+            }
+            return;
+          }
+
+          // Play sound on all note interactions (add, fill, and remove)
+          if (currentState.soundMode !== 'none') {
+            const octave = parseInt(note.match(/\d+/)?.[0]) || 3;
+            window.SlimSolo.AudioPlayer.playNote(noteName, octave);
+          }
 
           // Dispatch to reducer - nextState calculated there for correct batching
           dispatch({
